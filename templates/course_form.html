@@ -24,105 +24,76 @@
             {% endif %}
         </div>
 
-        <div class="space-y-2">
-            <label for="teacher_id" class="block text-sm font-medium text-gray-700">Преподаватель</label>
-            {{ form.teacher_id(class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500") }}
-            {% if form.teacher_id.errors %}
-                <div class="text-red-500 text-sm mt-1">
-                    {% for error in form.teacher_id.errors %}
-                        {{ error }}
-                    {% endfor %}
+        <!-- Блок количества занятий -->
+        <div class="p-4 bg-gray-50 rounded-lg border border-gray-200 mb-6">
+            <h2 class="font-medium text-gray-700 border-b pb-2 mb-4">Количество занятий</h2>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="space-y-2 bg-blue-50 p-3 rounded-lg">
+                    <label for="lecture_count" class="block text-sm font-medium text-blue-700">Количество лекций</label>
+                    {{ form.lecture_count(class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500", min="0") }}
                 </div>
-            {% endif %}
-        </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div class="space-y-2">
-                <label for="lecture_count" class="block text-sm font-medium text-gray-700">Количество лекций</label>
-                {{ form.lecture_count(class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500") }}
-                {% if form.lecture_count.errors %}
-                    <div class="text-red-500 text-sm mt-1">
-                        {% for error in form.lecture_count.errors %}
-                            {{ error }}
-                        {% endfor %}
-                    </div>
-                {% endif %}
-            </div>
+                <div class="space-y-2 bg-green-50 p-3 rounded-lg">
+                    <label for="practice_count" class="block text-sm font-medium text-green-700">Количество практик</label>
+                    {{ form.practice_count(class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500", min="0") }}
+                </div>
 
-            <div class="space-y-2">
-                <label for="practice_count" class="block text-sm font-medium text-gray-700">Количество практик</label>
-                {{ form.practice_count(class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500") }}
-                {% if form.practice_count.errors %}
-                    <div class="text-red-500 text-sm mt-1">
-                        {% for error in form.practice_count.errors %}
-                            {{ error }}
-                        {% endfor %}
-                    </div>
-                {% endif %}
-            </div>
-
-            <div class="space-y-2">
-                <label for="lab_count" class="block text-sm font-medium text-gray-700">Количество лабораторных</label>
-                {{ form.lab_count(class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500") }}
-                {% if form.lab_count.errors %}
-                    <div class="text-red-500 text-sm mt-1">
-                        {% for error in form.lab_count.errors %}
-                            {{ error }}
-                        {% endfor %}
-                    </div>
-                {% endif %}
+                <div class="space-y-2 bg-purple-50 p-3 rounded-lg">
+                    <label for="lab_count" class="block text-sm font-medium text-purple-700">Количество лабораторных</label>
+                    {{ form.lab_count(class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500", min="0") }}
+                </div>
             </div>
         </div>
 
-        <div class="space-y-2">
-            <label for="start_week" class="block text-sm font-medium text-gray-700">Начальная неделя</label>
-            {{ form.start_week(class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500") }}
-            {% if form.start_week.errors %}
-                <div class="text-red-500 text-sm mt-1">
-                    {% for error in form.start_week.errors %}
-                        {{ error }}
-                    {% endfor %}
+        <!-- Блок с преподавателями - упрощенный без режимов -->
+        <div class="space-y-4 bg-gray-50 p-4 rounded-lg border border-gray-200 mb-6">
+            <h2 class="font-medium text-gray-700 border-b pb-2">Преподаватели для типов занятий</h2>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <!-- Лекции -->
+                <div id="lecture-section" class="p-3 bg-blue-50 rounded-lg">
+                    <label class="block text-sm font-medium text-blue-700 mb-2">Преподаватель лекций</label>
+                    {{ form.lecture_teacher_id(class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500") }}
                 </div>
-            {% endif %}
+
+                <!-- Практики -->
+                <div id="practice-section" class="p-3 bg-green-50 rounded-lg">
+                    <label class="block text-sm font-medium text-green-700 mb-2">Преподаватель практик</label>
+                    {{ form.practice_teacher_id(class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500") }}
+                </div>
+
+                <!-- Лабораторные -->
+                <div id="lab-section" class="p-3 bg-purple-50 rounded-lg">
+                    <label class="block text-sm font-medium text-purple-700 mb-2">Преподаватель лабораторных</label>
+                    {{ form.lab_teacher_id(class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500") }}
+                </div>
+            </div>
         </div>
 
-        <div class="space-y-2">
-            <label for="distribution_type" class="block text-sm font-medium text-gray-700">Тип распределения занятий</label>
-            {{ form.distribution_type(class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500") }}
-            <p class="text-gray-500 text-sm">Выберите способ распределения занятий в течение семестра</p>
-            {% if form.distribution_type.errors %}
-                <div class="text-red-500 text-sm mt-1">
-                    {% for error in form.distribution_type.errors %}
-                        {{ error }}
-                    {% endfor %}
-                </div>
-            {% endif %}
+        <!-- Прочие параметры -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="space-y-2">
+                <label for="start_week" class="block text-sm font-medium text-gray-700">Начальная неделя</label>
+                {{ form.start_week(class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500") }}
+            </div>
+
+            <div class="space-y-2">
+                <label for="distribution_type" class="block text-sm font-medium text-gray-700">Тип распределения</label>
+                {{ form.distribution_type(class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500") }}
+            </div>
         </div>
 
         <div class="space-y-2">
             <label for="groups" class="block text-sm font-medium text-gray-700">Группы</label>
             {{ form.groups(class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500", size=5) }}
             <p class="text-gray-500 text-sm">Удерживайте Ctrl для выбора нескольких групп</p>
-            {% if form.groups.errors %}
-                <div class="text-red-500 text-sm mt-1">
-                    {% for error in form.groups.errors %}
-                        {{ error }}
-                    {% endfor %}
-                </div>
-            {% endif %}
         </div>
 
         <div class="space-y-2">
             <label for="preferred_rooms" class="block text-sm font-medium text-gray-700">Предпочтительные аудитории</label>
             {{ form.preferred_rooms(class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500", size=5) }}
-            <p class="text-gray-500 text-sm">Удерживайте Ctrl для выбора нескольких аудиторий. Если не выбрано, будут использоваться все подходящие аудитории.</p>
-            {% if form.preferred_rooms.errors %}
-                <div class="text-red-500 text-sm mt-1">
-                    {% for error in form.preferred_rooms.errors %}
-                        {{ error }}
-                    {% endfor %}
-                </div>
-            {% endif %}
+            <p class="text-gray-500 text-sm">Удерживайте Ctrl для выбора нескольких аудиторий</p>
         </div>
 
         <div class="flex space-x-4 pt-4">
@@ -133,4 +104,40 @@
         </div>
     </form>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Получаем элементы
+        const lectureCount = document.getElementById('lecture_count');
+        const practiceCount = document.getElementById('practice_count');
+        const labCount = document.getElementById('lab_count');
+
+        const lectureSection = document.getElementById('lecture-section');
+        const practiceSection = document.getElementById('practice-section');
+        const labSection = document.getElementById('lab-section');
+
+        // Функция обновления видимости секций в зависимости от количества занятий
+        function updateSections() {
+            const hasLectures = parseInt(lectureCount.value) > 0;
+            const hasPractices = parseInt(practiceCount.value) > 0;
+            const hasLabs = parseInt(labCount.value) > 0;
+
+            lectureSection.style.display = hasLectures ? 'block' : 'none';
+            practiceSection.style.display = hasPractices ? 'block' : 'none';
+            labSection.style.display = hasLabs ? 'block' : 'none';
+        }
+
+        // Слушатели событий
+        lectureCount.addEventListener('input', updateSections);
+        practiceCount.addEventListener('input', updateSections);
+        labCount.addEventListener('input', updateSections);
+
+        // Инициализация при загрузке
+        updateSections();
+
+        console.log('Форма инициализирована в упрощенном режиме');
+    });
+</script>
 {% endblock %}

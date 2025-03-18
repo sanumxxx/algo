@@ -25,7 +25,8 @@ csrf = CSRFProtect(app)
 class Teacher(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
-    courses = relationship("Course", back_populates="teacher")
+    # Изменено отношение с курсами
+    courses = relationship("CourseTeacher", back_populates="teacher")
 
     def __repr__(self):
         return f'<Teacher {self.name}>'
@@ -60,23 +61,47 @@ course_preferred_rooms = db.Table('course_preferred_rooms',
                                   )
 
 
+# Новая модель для связи курса с преподавателями по типам занятий
+class CourseTeacher(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    course_id = db.Column(db.Integer, db.ForeignKey('course.id'), nullable=False)
+    teacher_id = db.Column(db.Integer, db.ForeignKey('teacher.id'), nullable=False)
+    lesson_type = db.Column(db.String(10), nullable=False)  # 'lecture', 'practice', 'lab'
+
+    course = relationship("Course", back_populates="course_teachers")
+    teacher = relationship("Teacher", back_populates="courses")
+
+    def __repr__(self):
+        return f'<CourseTeacher {self.course.name} - {self.teacher.name} - {self.lesson_type}>'
+
+
 class Course(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
-    teacher_id = db.Column(db.Integer, db.ForeignKey('teacher.id'), nullable=False)
-    teacher = relationship("Teacher", back_populates="courses")
+    # Удалены поля teacher_id и teacher, добавлено отношение course_teachers
     lecture_count = db.Column(db.Integer, default=0)
     practice_count = db.Column(db.Integer, default=0)
     lab_count = db.Column(db.Integer, default=0)
     start_week = db.Column(db.Integer, default=1)
     distribution_type = db.Column(db.String(20), default='even')  # even, front_loaded, back_loaded, etc.
     groups = relationship("CourseGroup", back_populates="course")
+    course_teachers = relationship("CourseTeacher", back_populates="course", cascade="all, delete-orphan")
     schedule_items = relationship("ScheduleItem", back_populates="course")
     preferred_rooms = relationship("Room", secondary=course_preferred_rooms,
                                    backref=db.backref('preferred_for_courses', lazy='dynamic'))
 
     def __repr__(self):
         return f'<Course {self.name}>'
+
+    def get_teacher_for_type(self, lesson_type):
+        """Получить преподавателя для определенного типа занятий"""
+        course_teacher = CourseTeacher.query.filter_by(course_id=self.id, lesson_type=lesson_type).first()
+        return course_teacher.teacher if course_teacher else None
+
+    def get_teacher_name_for_type(self, lesson_type):
+        """Получить имя преподавателя для определенного типа занятий"""
+        teacher = self.get_teacher_for_type(lesson_type)
+        return teacher.name if teacher else "Не назначен"
 
 
 class CourseGroup(db.Model):
@@ -101,6 +126,9 @@ class ScheduleItem(db.Model):
     time_slot = db.Column(db.Integer, nullable=False)  # 0-7 (пары в день)
     lesson_type = db.Column(db.String(10), nullable=False)  # lecture, practice, lab
     groups = db.Column(db.String, nullable=False)  # Сериализованный список ID групп
+    teacher_id = db.Column(db.Integer, db.ForeignKey('teacher.id'),
+                           nullable=True)  # Изменено: добавлен ID преподавателя
+    teacher = relationship("Teacher")  # Изменено: добавлено отношение с преподавателем
 
     def __repr__(self):
         return f'<ScheduleItem {self.course.name} - Week {self.week}, Day {self.day}, Slot {self.time_slot}>'
@@ -142,7 +170,11 @@ class RoomForm(FlaskForm):
 
 class CourseForm(FlaskForm):
     name = StringField('Название дисциплины', validators=[DataRequired()])
-    teacher_id = SelectField('Преподаватель', coerce=int, validators=[DataRequired()])
+    # Изменено: добавлен флаг для разных преподавателей и поля для разных типов занятий
+    different_teachers = BooleanField('Разные преподаватели для типов занятий')
+    lecture_teacher_id = SelectField('Преподаватель (лекции)', coerce=int)
+    practice_teacher_id = SelectField('Преподаватель (практики)', coerce=int)
+    lab_teacher_id = SelectField('Преподаватель (лабораторные)', coerce=int)
     lecture_count = IntegerField('Количество лекций', default=0)
     practice_count = IntegerField('Количество практик', default=0)
     lab_count = IntegerField('Количество лабораторных', default=0)
@@ -338,15 +370,20 @@ def courses_list():
 @app.route('/courses/add', methods=['GET', 'POST'])
 def add_course():
     form = CourseForm()
-    form.teacher_id.choices = [(t.id, t.name) for t in Teacher.query.all()]
+    # Заполняем списки выбора
+    form.lecture_teacher_id.choices = [(t.id, t.name) for t in Teacher.query.all()]
+    form.practice_teacher_id.choices = [(t.id, t.name) for t in Teacher.query.all()]
+    form.lab_teacher_id.choices = [(t.id, t.name) for t in Teacher.query.all()]
     form.groups.choices = [(g.id, g.name) for g in Group.query.all()]
     form.preferred_rooms.choices = [(r.id, f"{r.name} (вместимость: {r.capacity})") for r in Room.query.all()]
 
     if form.validate_on_submit():
-        # Создаем объект курса без preferred_rooms
+        print("\n=== ОТЛАДКА: ДОБАВЛЕНИЕ ДИСЦИПЛИНЫ ===")
+        print(f"Название: {form.name.data}")
+
+        # Создаем объект курса без преподавателей
         course = Course(
             name=form.name.data,
-            teacher_id=form.teacher_id.data,
             lecture_count=form.lecture_count.data,
             practice_count=form.practice_count.data,
             lab_count=form.lab_count.data,
@@ -361,6 +398,48 @@ def add_course():
             course_group = CourseGroup(course_id=course.id, group_id=group_id)
             db.session.add(course_group)
 
+        # Сохраняем преподавателей для каждого типа занятий
+        teachers_added = []
+
+        # Лекции
+        if form.lecture_count.data > 0 and form.lecture_teacher_id.data:
+            lecture_teacher_id = form.lecture_teacher_id.data
+            print(f"Добавление преподавателя лекций: ID={lecture_teacher_id}")
+            ct = CourseTeacher(
+                course_id=course.id,
+                teacher_id=lecture_teacher_id,
+                lesson_type='lecture'
+            )
+            db.session.add(ct)
+            teacher_name = Teacher.query.get(lecture_teacher_id).name
+            teachers_added.append(f"лекции: {teacher_name}")
+
+        # Практики
+        if form.practice_count.data > 0 and form.practice_teacher_id.data:
+            practice_teacher_id = form.practice_teacher_id.data
+            print(f"Добавление преподавателя практик: ID={practice_teacher_id}")
+            ct = CourseTeacher(
+                course_id=course.id,
+                teacher_id=practice_teacher_id,
+                lesson_type='practice'
+            )
+            db.session.add(ct)
+            teacher_name = Teacher.query.get(practice_teacher_id).name
+            teachers_added.append(f"практики: {teacher_name}")
+
+        # Лабораторные
+        if form.lab_count.data > 0 and form.lab_teacher_id.data:
+            lab_teacher_id = form.lab_teacher_id.data
+            print(f"Добавление преподавателя лабораторных: ID={lab_teacher_id}")
+            ct = CourseTeacher(
+                course_id=course.id,
+                teacher_id=lab_teacher_id,
+                lesson_type='lab'
+            )
+            db.session.add(ct)
+            teacher_name = Teacher.query.get(lab_teacher_id).name
+            teachers_added.append(f"лабораторные: {teacher_name}")
+
         # Связываем курс с предпочтительными аудиториями
         if form.preferred_rooms.data:
             for room_id in form.preferred_rooms.data:
@@ -369,7 +448,20 @@ def add_course():
                     course.preferred_rooms.append(room)
 
         db.session.commit()
-        flash('Дисциплина успешно добавлена!', 'success')
+
+        # Проверяем что реально сохранилось в базе
+        print("\n=== ПРОВЕРКА СОХРАНЕННЫХ ДАННЫХ ===")
+        saved_course = Course.query.get(course.id)
+        saved_teachers = CourseTeacher.query.filter_by(course_id=course.id).all()
+        print(f"Сохраненный курс: ID={saved_course.id}, Название={saved_course.name}")
+        print(f"Количество преподавателей: {len(saved_teachers)}")
+        for teacher in saved_teachers:
+            print(
+                f"  - Тип: {teacher.lesson_type}, Преподаватель ID: {teacher.teacher_id}, Имя: {Teacher.query.get(teacher.teacher_id).name}")
+        print("===================================\n")
+
+        teachers_text = ", ".join(teachers_added)
+        flash(f'Дисциплина успешно добавлена! Преподаватели: {teachers_text}', 'success')
         return redirect(url_for('courses_list'))
 
     return render_template('course_form.html', form=form, title='Добавить дисциплину')
@@ -379,19 +471,52 @@ def add_course():
 def edit_course(id):
     course = Course.query.get_or_404(id)
     form = CourseForm(obj=course)
-    form.teacher_id.choices = [(t.id, t.name) for t in Teacher.query.all()]
+    form.lecture_teacher_id.choices = [(t.id, t.name) for t in Teacher.query.all()]
+    form.practice_teacher_id.choices = [(t.id, t.name) for t in Teacher.query.all()]
+    form.lab_teacher_id.choices = [(t.id, t.name) for t in Teacher.query.all()]
     form.groups.choices = [(g.id, g.name) for g in Group.query.all()]
     form.preferred_rooms.choices = [(r.id, f"{r.name} (вместимость: {r.capacity})") for r in Room.query.all()]
 
     # Pre-populate groups and preferred rooms
     if request.method == 'GET':
+        print("\n=== ОТЛАДКА: ЗАГРУЗКА ФОРМЫ РЕДАКТИРОВАНИЯ ===")
+        print(f"Курс ID: {course.id}, Название: {course.name}")
+
         form.groups.data = [cg.group_id for cg in CourseGroup.query.filter_by(course_id=course.id).all()]
         form.preferred_rooms.data = [room.id for room in course.preferred_rooms]
 
+        # Предзаполняем данные о преподавателях
+        lecture_teacher = course.get_teacher_for_type('lecture')
+        practice_teacher = course.get_teacher_for_type('practice')
+        lab_teacher = course.get_teacher_for_type('lab')
+
+        print(f"Текущие преподаватели:")
+        if lecture_teacher:
+            print(f"- Лекции: {lecture_teacher.name} (ID: {lecture_teacher.id})")
+            form.lecture_teacher_id.data = lecture_teacher.id
+        else:
+            print("- Лекции: не назначен")
+
+        if practice_teacher:
+            print(f"- Практики: {practice_teacher.name} (ID: {practice_teacher.id})")
+            form.practice_teacher_id.data = practice_teacher.id
+        else:
+            print("- Практики: не назначен")
+
+        if lab_teacher:
+            print(f"- Лабораторные: {lab_teacher.name} (ID: {lab_teacher.id})")
+            form.lab_teacher_id.data = lab_teacher.id
+        else:
+            print("- Лабораторные: не назначен")
+
+        print("==============================\n")
+
     if form.validate_on_submit():
+        print("\n=== ОТЛАДКА: СОХРАНЕНИЕ ИЗМЕНЕНИЙ ДИСЦИПЛИНЫ ===")
+        print(f"Курс ID: {course.id}, Название: {form.name.data}")
+
         # Обновляем основные поля курса (кроме отношений)
         course.name = form.name.data
-        course.teacher_id = form.teacher_id.data
         course.lecture_count = form.lecture_count.data
         course.practice_count = form.practice_count.data
         course.lab_count = form.lab_count.data
@@ -411,8 +536,67 @@ def edit_course(id):
             if room:
                 course.preferred_rooms.append(room)
 
+        # Обновляем преподавателей
+        # Удаляем существующие связи с преподавателями
+        CourseTeacher.query.filter_by(course_id=course.id).delete()
+
+        # Сохраняем преподавателей для каждого типа занятий
+        teachers_added = []
+
+        # Лекции
+        if form.lecture_count.data > 0 and form.lecture_teacher_id.data:
+            lecture_teacher_id = form.lecture_teacher_id.data
+            print(f"Добавление преподавателя лекций: ID={lecture_teacher_id}")
+            ct = CourseTeacher(
+                course_id=course.id,
+                teacher_id=lecture_teacher_id,
+                lesson_type='lecture'
+            )
+            db.session.add(ct)
+            teacher_name = Teacher.query.get(lecture_teacher_id).name
+            teachers_added.append(f"лекции: {teacher_name}")
+
+        # Практики
+        if form.practice_count.data > 0 and form.practice_teacher_id.data:
+            practice_teacher_id = form.practice_teacher_id.data
+            print(f"Добавление преподавателя практик: ID={practice_teacher_id}")
+            ct = CourseTeacher(
+                course_id=course.id,
+                teacher_id=practice_teacher_id,
+                lesson_type='practice'
+            )
+            db.session.add(ct)
+            teacher_name = Teacher.query.get(practice_teacher_id).name
+            teachers_added.append(f"практики: {teacher_name}")
+
+        # Лабораторные
+        if form.lab_count.data > 0 and form.lab_teacher_id.data:
+            lab_teacher_id = form.lab_teacher_id.data
+            print(f"Добавление преподавателя лабораторных: ID={lab_teacher_id}")
+            ct = CourseTeacher(
+                course_id=course.id,
+                teacher_id=lab_teacher_id,
+                lesson_type='lab'
+            )
+            db.session.add(ct)
+            teacher_name = Teacher.query.get(lab_teacher_id).name
+            teachers_added.append(f"лабораторные: {teacher_name}")
+
         db.session.commit()
-        flash('Данные дисциплины обновлены!', 'success')
+
+        # Проверяем что реально сохранилось в базе
+        print("\n=== ПРОВЕРКА СОХРАНЕННЫХ ДАННЫХ ===")
+        saved_course = Course.query.get(course.id)
+        saved_teachers = CourseTeacher.query.filter_by(course_id=course.id).all()
+        print(f"Сохраненный курс: ID={saved_course.id}, Название={saved_course.name}")
+        print(f"Количество преподавателей: {len(saved_teachers)}")
+        for teacher in saved_teachers:
+            print(
+                f"  - Тип: {teacher.lesson_type}, Преподаватель ID: {teacher.teacher_id}, Имя: {Teacher.query.get(teacher.teacher_id).name}")
+        print("===================================\n")
+
+        teachers_text = ", ".join(teachers_added)
+        flash(f'Данные дисциплины обновлены! Преподаватели: {teachers_text}', 'success')
         return redirect(url_for('courses_list'))
 
     return render_template('course_form.html', form=form, title='Редактировать дисциплину')
@@ -421,7 +605,9 @@ def edit_course(id):
 @app.route('/courses/delete/<int:id>')
 def delete_course(id):
     course = Course.query.get_or_404(id)
+    # Удаляем связи с группами
     CourseGroup.query.filter_by(course_id=course.id).delete()
+    # Удаляем связи с преподавателями (автоматически через cascade)
     db.session.delete(course)
     db.session.commit()
     flash('Дисциплина удалена!', 'success')
@@ -494,12 +680,26 @@ def schedule_data():
         course = Course.query.get(item.course_id)
         room = Room.query.get(item.room_id)
 
+        # Получаем преподавателя для этого занятия
+        teacher_name = "Не назначен"
+        if item.teacher_id:
+            teacher = Teacher.query.get(item.teacher_id)
+            teacher_name = teacher.name if teacher else "Не назначен"
+        else:
+            # Если преподаватель не назначен в ScheduleItem, ищем в CourseTeacher
+            course_teacher = CourseTeacher.query.filter_by(
+                course_id=course.id,
+                lesson_type=item.lesson_type
+            ).first()
+            if course_teacher and course_teacher.teacher:
+                teacher_name = course_teacher.teacher.name
+
         schedule_data.append({
             'id': item.id,
             'day': item.day,
             'time_slot': item.time_slot,
             'course_name': course.name,
-            'teacher_name': Teacher.query.get(course.teacher_id).name,
+            'teacher_name': teacher_name,
             'room_name': room.name,
             'lesson_type': item.lesson_type
         })
@@ -577,6 +777,12 @@ class ScheduleGenerator:
 
             # Обрабатываем лекции
             if course.lecture_count > 0:
+                # Получаем преподавателя для лекций
+                lecture_teacher = course.get_teacher_for_type('lecture')
+                if not lecture_teacher:
+                    print(f"  ОШИБКА: Преподаватель для лекций не назначен для курса {course.name}")
+                    continue
+
                 # Рассчитываем частоту - как часто нужно проводить лекции
                 frequency = total_weeks / course.lecture_count
                 print(f"  Лекции: {course.lecture_count} шт., частота: одна лекция каждые {frequency:.2f} недели")
@@ -590,6 +796,7 @@ class ScheduleGenerator:
                     lessons_to_schedule.append({
                         'course': course,
                         'lesson_type': 'lecture',
+                        'teacher': lecture_teacher,
                         'group_ids': group_ids,
                         'total_students': total_students,
                         'target_week': week
@@ -597,6 +804,12 @@ class ScheduleGenerator:
 
             # Обрабатываем практики
             if course.practice_count > 0:
+                # Получаем преподавателя для практик
+                practice_teacher = course.get_teacher_for_type('practice')
+                if not practice_teacher:
+                    print(f"  ОШИБКА: Преподаватель для практик не назначен для курса {course.name}")
+                    continue
+
                 # Рассчитываем частоту
                 frequency = total_weeks / course.practice_count
                 print(f"  Практики: {course.practice_count} шт., частота: одна практика каждые {frequency:.2f} недели")
@@ -610,6 +823,7 @@ class ScheduleGenerator:
                     lessons_to_schedule.append({
                         'course': course,
                         'lesson_type': 'practice',
+                        'teacher': practice_teacher,
                         'group_ids': group_ids,
                         'total_students': total_students,
                         'target_week': week
@@ -617,6 +831,12 @@ class ScheduleGenerator:
 
             # Обрабатываем лабораторные
             if course.lab_count > 0:
+                # Получаем преподавателя для лабораторных
+                lab_teacher = course.get_teacher_for_type('lab')
+                if not lab_teacher:
+                    print(f"  ОШИБКА: Преподаватель для лабораторных не назначен для курса {course.name}")
+                    continue
+
                 # Рассчитываем частоту
                 frequency = total_weeks / course.lab_count
                 print(f"  Лабораторные: {course.lab_count} шт., частота: одна лаба каждые {frequency:.2f} недели")
@@ -630,6 +850,7 @@ class ScheduleGenerator:
                     lessons_to_schedule.append({
                         'course': course,
                         'lesson_type': 'lab',
+                        'teacher': lab_teacher,
                         'group_ids': group_ids,
                         'total_students': total_students,
                         'target_week': week
@@ -735,9 +956,14 @@ class ScheduleGenerator:
         group_ids = lesson['group_ids']
         total_students = lesson['total_students']
         target_week = lesson.get('target_week')
+        teacher = lesson.get('teacher')  # Преподаватель для данного типа занятия
 
         if target_week is None:
             print(f"Ошибка: не указана целевая неделя для занятия {course.name} {lesson_type}")
+            return False
+
+        if not teacher:
+            print(f"Ошибка: не указан преподаватель для занятия {course.name} {lesson_type}")
             return False
 
         # Находим подходящие аудитории
@@ -751,8 +977,8 @@ class ScheduleGenerator:
             for slot in range(self.slots_per_day):
                 time_key = (target_week, day, slot)
 
-                # Проверяем ограничения
-                if self._check_constraints(time_key, course, group_ids, suitable_rooms):
+                # Проверяем ограничения с учетом конкретного преподавателя
+                if self._check_constraints(time_key, course, group_ids, suitable_rooms, teacher):
                     # Выбираем аудиторию
                     room = self._select_best_room(course, suitable_rooms, total_students)
 
@@ -764,7 +990,8 @@ class ScheduleGenerator:
                         'course': course,
                         'room': room,
                         'lesson_type': lesson_type,
-                        'groups': group_ids
+                        'groups': group_ids,
+                        'teacher': teacher  # Добавляем преподавателя в запись расписания
                     })
 
                     return True
@@ -777,7 +1004,7 @@ class ScheduleGenerator:
                 for day in range(self.days_per_week):
                     for slot in range(self.slots_per_day):
                         time_key = (earlier_week, day, slot)
-                        if self._check_constraints(time_key, course, group_ids, suitable_rooms):
+                        if self._check_constraints(time_key, course, group_ids, suitable_rooms, teacher):
                             room = self._select_best_room(course, suitable_rooms, total_students)
                             if time_key not in self.schedule:
                                 self.schedule[time_key] = []
@@ -785,7 +1012,8 @@ class ScheduleGenerator:
                                 'course': course,
                                 'room': room,
                                 'lesson_type': lesson_type,
-                                'groups': group_ids
+                                'groups': group_ids,
+                                'teacher': teacher
                             })
                             return True
 
@@ -795,7 +1023,7 @@ class ScheduleGenerator:
                 for day in range(self.days_per_week):
                     for slot in range(self.slots_per_day):
                         time_key = (later_week, day, slot)
-                        if self._check_constraints(time_key, course, group_ids, suitable_rooms):
+                        if self._check_constraints(time_key, course, group_ids, suitable_rooms, teacher):
                             room = self._select_best_room(course, suitable_rooms, total_students)
                             if time_key not in self.schedule:
                                 self.schedule[time_key] = []
@@ -803,7 +1031,8 @@ class ScheduleGenerator:
                                 'course': course,
                                 'room': room,
                                 'lesson_type': lesson_type,
-                                'groups': group_ids
+                                'groups': group_ids,
+                                'teacher': teacher
                             })
                             return True
 
@@ -856,7 +1085,7 @@ class ScheduleGenerator:
                             )
 
                             if suitable_rooms and self._check_constraints(
-                                    new_key, lesson['course'], lesson['groups'], suitable_rooms
+                                    new_key, lesson['course'], lesson['groups'], suitable_rooms, lesson['teacher']
                             ):
                                 # Нашли подходящее место - перемещаем занятие
                                 lesson['room'] = self._select_best_room(
@@ -978,7 +1207,7 @@ class ScheduleGenerator:
         # Если предпочтительных нет или они не подходят, выбираем из всех доступных
         return min(rooms, key=lambda r: r.capacity - total_students if r.capacity >= total_students else float('inf'))
 
-    def _check_constraints(self, time_key, course, group_ids, suitable_rooms):
+    def _check_constraints(self, time_key, course, group_ids, suitable_rooms, teacher):
         """Проверяет жесткие и мягкие ограничения для размещения занятия"""
         week, day, slot = time_key
 
@@ -986,7 +1215,7 @@ class ScheduleGenerator:
         if time_key in self.schedule:
             # Проверка доступности преподавателя
             for item in self.schedule[time_key]:
-                if item['course'].teacher_id == course.teacher_id:
+                if item['teacher'].id == teacher.id:
                     return False
 
                 # Проверка доступности групп
@@ -1006,7 +1235,7 @@ class ScheduleGenerator:
             check_key = (week, day, check_slot)
             if check_key in self.schedule:
                 for item in self.schedule[check_key]:
-                    if item['course'].teacher_id == course.teacher_id:
+                    if item['teacher'].id == teacher.id:
                         teacher_lessons_today += 1
 
         if teacher_lessons_today >= 3:
@@ -1036,6 +1265,7 @@ class ScheduleGenerator:
                 schedule_item = ScheduleItem(
                     course_id=item['course'].id,
                     room_id=item['room'].id,
+                    teacher_id=item['teacher'].id,  # Сохраняем ID преподавателя
                     week=week,
                     day=day,
                     time_slot=slot,

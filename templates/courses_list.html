@@ -20,10 +20,9 @@
                 <thead class="bg-indigo-50 text-indigo-800">
                     <tr>
                         <th class="py-3 px-4 text-left">Название дисциплины</th>
-                        <th class="py-3 px-4 text-left">Преподаватель</th>
+                        <th class="py-3 px-4 text-left">Преподаватели</th>
                         <th class="py-3 px-4 text-center">Занятия (Л/П/Лаб)</th>
                         <th class="py-3 px-4 text-center">Начальная неделя</th>
-                        <th class="py-3 px-4 text-left">Распределение</th>
                         <th class="py-3 px-4 text-left">Группы</th>
                         <th class="py-3 px-4 text-right">Действия</th>
                     </tr>
@@ -32,7 +31,38 @@
                     {% for course in courses %}
                         <tr class="hover:bg-gray-50">
                             <td class="py-3 px-4">{{ course.name }}</td>
-                            <td class="py-3 px-4">{{ course.teacher.name }}</td>
+                            <td class="py-3 px-4">
+                                {% set lecture_teacher = course.get_teacher_for_type('lecture') %}
+                                {% set practice_teacher = course.get_teacher_for_type('practice') %}
+                                {% set lab_teacher = course.get_teacher_for_type('lab') %}
+
+                                {% if lecture_teacher and practice_teacher and lab_teacher and
+                                      (lecture_teacher.id == practice_teacher.id == lab_teacher.id) %}
+                                    <!-- Один преподаватель на все типы занятий -->
+                                    {{ lecture_teacher.name }}
+                                {% else %}
+                                    <!-- Разные преподаватели -->
+                                    <div class="space-y-1">
+                                        {% if course.lecture_count > 0 and lecture_teacher %}
+                                            <div class="text-xs">
+                                                <span class="font-semibold">Лекции:</span> {{ lecture_teacher.name }}
+                                            </div>
+                                        {% endif %}
+
+                                        {% if course.practice_count > 0 and practice_teacher %}
+                                            <div class="text-xs">
+                                                <span class="font-semibold">Практики:</span> {{ practice_teacher.name }}
+                                            </div>
+                                        {% endif %}
+
+                                        {% if course.lab_count > 0 and lab_teacher %}
+                                            <div class="text-xs">
+                                                <span class="font-semibold">Лабораторные:</span> {{ lab_teacher.name }}
+                                            </div>
+                                        {% endif %}
+                                    </div>
+                                {% endif %}
+                            </td>
                             <td class="py-3 px-4 text-center">{{ course.lecture_count }}/{{ course.practice_count }}/{{ course.lab_count }}</td>
                             <td class="py-3 px-4 text-center">{{ course.start_week }}</td>
                             <td class="py-3 px-4">
