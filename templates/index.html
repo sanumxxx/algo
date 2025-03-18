@@ -1,0 +1,519 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div x-data="{
+    activeTab: localStorage.getItem('activeTab') || 'settings',
+    setActiveTab(tab) {
+        this.activeTab = tab;
+        localStorage.setItem('activeTab', tab);
+    }
+}">
+    <!-- Навигация по вкладкам -->
+    <div class="border-b border-gray-200 mb-6">
+        <nav class="flex -mb-px space-x-8">
+            <button @click="setActiveTab('settings')" :class="{ 'border-primary-500 text-primary-600': activeTab === 'settings', 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300': activeTab !== 'settings' }" class="py-4 px-1 font-medium text-sm border-b-2 focus:outline-none transition-colors duration-200">
+                <i class="fas fa-cog mr-2"></i>Настройки семестра
+            </button>
+            <button @click="setActiveTab('professors')" :class="{ 'border-primary-500 text-primary-600': activeTab === 'professors', 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300': activeTab !== 'professors' }" class="py-4 px-1 font-medium text-sm border-b-2 focus:outline-none transition-colors duration-200">
+                <i class="fas fa-user-tie mr-2"></i>Преподаватели
+            </button>
+            <button @click="setActiveTab('classrooms')" :class="{ 'border-primary-500 text-primary-600': activeTab === 'classrooms', 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300': activeTab !== 'classrooms' }" class="py-4 px-1 font-medium text-sm border-b-2 focus:outline-none transition-colors duration-200">
+                <i class="fas fa-door-open mr-2"></i>Аудитории
+            </button>
+            <button @click="setActiveTab('groups')" :class="{ 'border-primary-500 text-primary-600': activeTab === 'groups', 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300': activeTab !== 'groups' }" class="py-4 px-1 font-medium text-sm border-b-2 focus:outline-none transition-colors duration-200">
+                <i class="fas fa-users mr-2"></i>Группы
+            </button>
+            <button @click="setActiveTab('courses')" :class="{ 'border-primary-500 text-primary-600': activeTab === 'courses', 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300': activeTab !== 'courses' }" class="py-4 px-1 font-medium text-sm border-b-2 focus:outline-none transition-colors duration-200">
+                <i class="fas fa-book mr-2"></i>Дисциплины
+            </button>
+            <button @click="setActiveTab('schedule')" :class="{ 'border-primary-500 text-primary-600': activeTab === 'schedule', 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300': activeTab !== 'schedule' }" class="py-4 px-1 font-medium text-sm border-b-2 focus:outline-none transition-colors duration-200">
+                <i class="fas fa-calendar-alt mr-2"></i>Расписание
+            </button>
+        </nav>
+    </div>
+
+    <!-- Содержимое вкладок -->
+    <div class="mt-6">
+        <!-- Настройки семестра -->
+        <div x-show="activeTab === 'settings'" x-transition>
+            <h2 class="text-xl font-semibold text-gray-800 mb-4">Настройки семестра</h2>
+            <div class="bg-gray-50 p-6 rounded-lg shadow-sm">
+                <form action="{{ url_for('set_semester') }}" method="post">
+                    <div class="mb-4">
+                        <label for="weeks" class="block text-sm font-medium text-gray-700 mb-2">Количество недель в семестре:</label>
+                        <input type="number" id="weeks" name="weeks" required min="1" max="20" value="{{ data.semester_weeks }}" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500">
+                    </div>
+                    <button type="submit" class="mt-2 bg-primary-600 hover:bg-primary-700 text-white font-medium py-2 px-4 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors duration-200">
+                        Установить длительность семестра
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Преподаватели -->
+        <div x-show="activeTab === 'professors'" x-transition x-data="{ showModal: false, editId: null, editName: '' }">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4">Преподаватели</h2>
+            <div class="bg-gray-50 p-6 rounded-lg shadow-sm">
+                <form action="{{ url_for('add_professor') }}" method="post" class="mb-6">
+                    <div class="mb-4">
+                        <label for="professor_name" class="block text-sm font-medium text-gray-700 mb-2">ФИО преподавателя:</label>
+                        <input type="text" id="professor_name" name="name" required class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500">
+                    </div>
+                    <button type="submit" class="bg-primary-600 hover:bg-primary-700 text-white font-medium py-2 px-4 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors duration-200">
+                        Добавить преподавателя
+                    </button>
+                </form>
+
+                {% if data.professors %}
+                    <h3 class="text-lg font-medium text-gray-800 mb-3">Добавленные преподаватели:</h3>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead>
+                                <tr>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ФИО</th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Действия</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                                {% for professor in data.professors %}
+                                    <tr class="hover:bg-gray-50">
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ professor.id }}</td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ professor.name }}</td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                            <button @click="showModal = true; editId = {{ professor.id }}; editName = '{{ professor.name }}'" class="text-primary-600 hover:text-primary-900 mr-3">
+                                                <i class="fas fa-edit"></i> Редактировать
+                                            </button>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="bg-blue-50 p-4 rounded-md text-blue-700">
+                        <i class="fas fa-info-circle mr-2"></i>Нет добавленных преподавателей. Добавьте преподавателей, чтобы начать составление расписания.
+                    </div>
+                {% endif %}
+            </div>
+
+            <!-- Модальное окно редактирования -->
+            <div x-show="showModal" x-cloak class="fixed inset-0 z-10 overflow-y-auto" x-transition:enter="ease-out duration-300" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="ease-in duration-200" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0">
+                <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+                    <div class="fixed inset-0 transition-opacity" aria-hidden="true">
+                        <div class="absolute inset-0 bg-gray-500 opacity-75"></div>
+                    </div>
+
+                    <!-- Модальное содержимое -->
+                    <div x-show="showModal" @click.away="showModal = false" class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full" x-transition:enter="ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95" x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100" x-transition:leave="ease-in duration-200" x-transition:leave-start="opacity-100 translate-y-0 sm:scale-100" x-transition:leave-end="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95">
+                        <form :action="'/edit_professor/' + editId" method="post">
+                            <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                                <div class="sm:flex sm:items-start">
+                                    <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
+                                        <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">Редактирование преподавателя</h3>
+                                        <div class="mt-2">
+                                            <div class="mb-4">
+                                                <label for="edit-professor-name" class="block text-sm font-medium text-gray-700 mb-2">ФИО преподавателя:</label>
+                                                <input x-model="editName" type="text" id="edit-professor-name" name="name" required class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                                <button type="submit" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-primary-600 text-base font-medium text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 sm:ml-3 sm:w-auto sm:text-sm">
+                                    Сохранить
+                                </button>
+                                <button type="button" @click="showModal = false" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                                    Отмена
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Аудитории -->
+        <div x-show="activeTab === 'classrooms'" x-transition>
+            <h2 class="text-xl font-semibold text-gray-800 mb-4">Аудитории</h2>
+            <div class="bg-gray-50 p-6 rounded-lg shadow-sm">
+                <form action="{{ url_for('add_classroom') }}" method="post" class="mb-6">
+                    <div class="mb-4">
+                        <label for="classroom_name" class="block text-sm font-medium text-gray-700 mb-2">Номер аудитории:</label>
+                        <input type="text" id="classroom_name" name="name" required class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500">
+                    </div>
+                    <div class="mb-4">
+                        <label for="capacity" class="block text-sm font-medium text-gray-700 mb-2">Вместимость:</label>
+                        <input type="number" id="capacity" name="capacity" required min="1" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500">
+                    </div>
+                    <div class="mb-4">
+                        <span class="block text-sm font-medium text-gray-700 mb-2">Особенности:</span>
+                        <div class="mt-1 space-y-2">
+                            <div class="flex items-center">
+                                <input id="projector" name="features" value="projector" type="checkbox" class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded">
+                                <label for="projector" class="ml-2 block text-sm text-gray-700">Проектор</label>
+                            </div>
+                            <div class="flex items-center">
+                                <input id="computers" name="features" value="computers" type="checkbox" class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded">
+                                <label for="computers" class="ml-2 block text-sm text-gray-700">Компьютеры</label>
+                            </div>
+                            <div class="flex items-center">
+                                <input id="lab" name="features" value="lab" type="checkbox" class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded">
+                                <label for="lab" class="ml-2 block text-sm text-gray-700">Лаборатория</label>
+                            </div>
+                        </div>
+                    </div>
+                    <button type="submit" class="bg-primary-600 hover:bg-primary-700 text-white font-medium py-2 px-4 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors duration-200">
+                        Добавить аудиторию
+                    </button>
+                </form>
+
+                {% if data.classrooms %}
+                    <h3 class="text-lg font-medium text-gray-800 mb-3">Добавленные аудитории:</h3>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead>
+                                <tr>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Номер</th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Вместимость</th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Особенности</th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Действия</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                                {% for classroom in data.classrooms %}
+                                    <tr class="hover:bg-gray-50">
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ classroom.id }}</td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ classroom.name }}</td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ classroom.capacity }}</td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                            {% if classroom.features %}
+                                                <div class="flex flex-wrap gap-1">
+                                                    {% for feature in classroom.features %}
+                                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">
+                                                            {% if feature == "projector" %}
+                                                                <i class="fas fa-projector mr-1"></i>Проектор
+                                                            {% elif feature == "computers" %}
+                                                                <i class="fas fa-desktop mr-1"></i>Компьютеры
+                                                            {% elif feature == "lab" %}
+                                                                <i class="fas fa-flask mr-1"></i>Лаборатория
+                                                            {% else %}
+                                                                {{ feature }}
+                                                            {% endif %}
+                                                        </span>
+                                                    {% endfor %}
+                                                </div>
+                                            {% else %}
+                                                -
+                                            {% endif %}
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                            <button class="text-primary-600 hover:text-primary-900 mr-3">
+                                                <i class="fas fa-edit"></i> Редактировать
+                                            </button>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="bg-blue-50 p-4 rounded-md text-blue-700">
+                        <i class="fas fa-info-circle mr-2"></i>Нет добавленных аудиторий. Добавьте аудитории, чтобы начать составление расписания.
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Группы -->
+        <div x-show="activeTab === 'groups'" x-transition x-data="{ showModal: false, editId: null, editName: '', editStudentsCount: '' }">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4">Группы</h2>
+            <div class="bg-gray-50 p-6 rounded-lg shadow-sm">
+                <form action="{{ url_for('add_group') }}" method="post" class="mb-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label for="group_name" class="block text-sm font-medium text-gray-700 mb-2">Название группы:</label>
+                            <input type="text" id="group_name" name="name" required class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500">
+                        </div>
+                        <div>
+                            <label for="students_count" class="block text-sm font-medium text-gray-700 mb-2">Количество студентов:</label>
+                            <input type="number" id="students_count" name="students_count" required min="1" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500">
+                        </div>
+                    </div>
+                    <button type="submit" class="mt-4 bg-primary-600 hover:bg-primary-700 text-white font-medium py-2 px-4 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors duration-200">
+                        Добавить группу
+                    </button>
+                </form>
+
+                {% if data.groups %}
+                    <h3 class="text-lg font-medium text-gray-800 mb-3">Добавленные группы:</h3>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead>
+                                <tr>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Название</th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Количество студентов</th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Действия</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                                {% for group in data.groups %}
+                                    <tr class="hover:bg-gray-50">
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ group.id }}</td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ group.name }}</td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ group.students_count }}</td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                            <button @click="showModal = true; editId = {{ group.id }}; editName = '{{ group.name }}'; editStudentsCount = {{ group.students_count }}" class="text-primary-600 hover:text-primary-900 mr-3">
+                                                <i class="fas fa-edit"></i> Редактировать
+                                            </button>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="bg-blue-50 p-4 rounded-md text-blue-700">
+                        <i class="fas fa-info-circle mr-2"></i>Нет добавленных групп. Добавьте группы, чтобы назначить им дисциплины.
+                    </div>
+                {% endif %}
+            </div>
+
+            <!-- Модальное окно редактирования -->
+            <div x-show="showModal" x-cloak class="fixed inset-0 z-10 overflow-y-auto" x-transition:enter="ease-out duration-300" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="ease-in duration-200" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0">
+                <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+                    <div class="fixed inset-0 transition-opacity" aria-hidden="true">
+                        <div class="absolute inset-0 bg-gray-500 opacity-75"></div>
+                    </div>
+
+                    <!-- Модальное содержимое -->
+                    <div x-show="showModal" @click.away="showModal = false" class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full" x-transition:enter="ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95" x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100" x-transition:leave="ease-in duration-200" x-transition:leave-start="opacity-100 translate-y-0 sm:scale-100" x-transition:leave-end="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95">
+                        <form :action="'/edit_group/' + editId" method="post">
+                            <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                                <div class="sm:flex sm:items-start">
+                                    <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
+                                        <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">Редактирование группы</h3>
+                                        <div class="mt-2">
+                                            <div class="mb-4">
+                                                <label for="edit-group-name" class="block text-sm font-medium text-gray-700 mb-2">Название группы:</label>
+                                                <input x-model="editName" type="text" id="edit-group-name" name="name" required class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500">
+                                            </div>
+                                            <div class="mb-4">
+                                                <label for="edit-students-count" class="block text-sm font-medium text-gray-700 mb-2">Количество студентов:</label>
+                                                <input x-model="editStudentsCount" type="number" id="edit-students-count" name="students_count" required min="1" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                                <button type="submit" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-primary-600 text-base font-medium text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 sm:ml-3 sm:w-auto sm:text-sm">
+                                    Сохранить
+                                </button>
+                                <button type="button" @click="showModal = false" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                                    Отмена
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Дисциплины -->
+        <div x-show="activeTab === 'courses'" x-transition>
+            <h2 class="text-xl font-semibold text-gray-800 mb-4">Дисциплины</h2>
+            <div class="bg-gray-50 p-6 rounded-lg shadow-sm">
+                <form action="{{ url_for('add_course') }}" method="post" class="mb-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label for="course_name" class="block text-sm font-medium text-gray-700 mb-2">Название дисциплины:</label>
+                            <input type="text" id="course_name" name="name" required class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500">
+                        </div>
+                        <div>
+                            <label for="professor_id" class="block text-sm font-medium text-gray-700 mb-2">Преподаватель:</label>
+                            <select id="professor_id" name="professor_id" required {% if not data.professors %}disabled{% endif %} class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500">
+                                {% for professor in data.professors %}
+                                    <option value="{{ professor.id }}">{{ professor.name }}</option>
+                                {% endfor %}
+                            </select>
+                            {% if not data.professors %}
+                                <p class="mt-1 text-xs text-red-500">Сначала добавьте преподавателей во вкладке "Преподаватели"</p>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="mt-4">
+                        <label for="classrooms" class="block text-sm font-medium text-gray-700 mb-2">Возможные аудитории:</label>
+                        <select multiple id="classrooms" name="classrooms" required {% if not data.classrooms %}disabled{% endif %} class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500">
+                            {% for classroom in data.classrooms %}
+                                <option value="{{ classroom.id }}">{{ classroom.name }} (Вместимость: {{ classroom.capacity }})</option>
+                            {% endfor %}
+                        </select>
+                        {% if not data.classrooms %}
+                            <p class="mt-1 text-xs text-red-500">Сначала добавьте аудитории во вкладке "Аудитории"</p>
+                        {% else %}
+                            <p class="mt-1 text-xs text-gray-500">Удерживайте Ctrl (Windows) или Cmd (Mac) для выбора нескольких вариантов.</p>
+                        {% endif %}
+                    </div>
+
+                    <div class="mt-4">
+                        <label for="groups" class="block text-sm font-medium text-gray-700 mb-2">Группы:</label>
+                        <select multiple id="groups" name="groups" required {% if not data.groups %}disabled{% endif %} class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500">
+                            {% for group in data.groups %}
+                                <option value="{{ group.id }}">{{ group.name }} ({{ group.students_count }} студентов)</option>
+                            {% endfor %}
+                        </select>
+                        {% if not data.groups %}
+                            <p class="mt-1 text-xs text-red-500">Сначала добавьте группы во вкладке "Группы"</p>
+                        {% else %}
+                            <p class="mt-1 text-xs text-gray-500">Удерживайте Ctrl (Windows) или Cmd (Mac) для выбора нескольких вариантов.</p>
+                        {% endif %}
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                        <div>
+                            <label for="lecture_count" class="block text-sm font-medium text-gray-700 mb-2">Количество лекций:</label>
+                            <input type="number" id="lecture_count" name="lecture_count" required min="0" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500">
+                        </div>
+                        <div>
+                            <label for="practice_count" class="block text-sm font-medium text-gray-700 mb-2">Количество практик:</label>
+                            <input type="number" id="practice_count" name="practice_count" required min="0" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                        <div>
+                            <label for="start_week" class="block text-sm font-medium text-gray-700 mb-2">Начальная неделя:</label>
+                            <input type="number" id="start_week" name="start_week" required min="1" max="{{ data.semester_weeks if data.semester_weeks > 0 else 1 }}" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500">
+                        </div>
+                        <div>
+                            <label for="periodicity" class="block text-sm font-medium text-gray-700 mb-2">Периодичность:</label>
+                            <select id="periodicity" name="periodicity" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500">
+                                <option value="weekly">Еженедельно</option>
+                                <option value="biweekly">Раз в две недели</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="mt-6 bg-primary-600 hover:bg-primary-700 text-white font-medium py-2 px-4 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors duration-200" {% if not data.professors or not data.classrooms or not data.groups %}disabled{% endif %}>
+                        Добавить дисциплину
+                    </button>
+                </form>
+
+                {% if data.courses %}
+                    <h3 class="text-lg font-medium text-gray-800 mb-3">Добавленные дисциплины:</h3>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead>
+                                <tr>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Название</th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Преподаватель</th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Группы</th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Лекции/Практики</th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Периодичность</th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Действия</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                                {% for course in data.courses %}
+    {% set professor = get_professor_by_id(course.professor_id) %}
+    <tr class="hover:bg-gray-50">
+        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ course.name }}</td>
+        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ professor.name if professor else 'Не указан' }}</td>
+        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+            {% if course.groups %}
+                {% set groups = get_groups_by_ids(course.groups) %}
+                <div class="flex flex-wrap gap-1">
+                    {% for group in groups %}
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">{{ group.name }}</span>
+                    {% endfor %}
+                </div>
+            {% else %}
+                Не указаны
+            {% endif %}
+        </td>
+        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ course.lecture_count }}/{{ course.practice_count }}</td>
+        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ "Еженедельно" if course.periodicity == "weekly" else "Раз в две недели" }}</td>
+        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+            <a href="{{ url_for('edit_course', course_id=course.id) }}" class="text-primary-600 hover:text-primary-900">
+                <i class="fas fa-edit"></i> Редактировать
+            </a>
+        </td>
+    </tr>
+{% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="bg-blue-50 p-4 rounded-md text-blue-700">
+                        <i class="fas fa-info-circle mr-2"></i>Нет добавленных дисциплин. Добавьте дисциплины для составления расписания.
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Расписание -->
+        <div x-show="activeTab === 'schedule'" x-transition>
+            <h2 class="text-xl font-semibold text-gray-800 mb-4">Управление расписанием</h2>
+            <div class="bg-gray-50 p-6 rounded-lg shadow-sm">
+                <div class="bg-blue-50 p-4 rounded-md text-blue-700 mb-6">
+                    <h3 class="text-lg font-medium mb-2">Статус данных:</h3>
+                    <ul class="space-y-1">
+                        <li class="flex items-center">
+                            <i class="fas fa-calendar-week w-6"></i>
+                            <span>Длительность семестра: <strong>{{ data.semester_weeks }} недель</strong></span>
+                        </li>
+                        <li class="flex items-center">
+                            <i class="fas fa-user-tie w-6"></i>
+                            <span>Преподавателей: <strong>{{ data.professors|length }}</strong></span>
+                        </li>
+                        <li class="flex items-center">
+                            <i class="fas fa-door-open w-6"></i>
+                            <span>Аудиторий: <strong>{{ data.classrooms|length }}</strong></span>
+                        </li>
+                        <li class="flex items-center">
+                            <i class="fas fa-users w-6"></i>
+                            <span>Групп: <strong>{{ data.groups|length }}</strong></span>
+                        </li>
+                        <li class="flex items-center">
+                            <i class="fas fa-book w-6"></i>
+                            <span>Дисциплин: <strong>{{ data.courses|length }}</strong></span>
+                        </li>
+                    </ul>
+                </div>
+
+                <form action="{{ url_for('generate_schedule') }}" method="post" class="mb-6">
+                    <div class="text-center">
+                        <button type="submit" class="px-8 py-3 bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors duration-200" {% if not data.courses or not data.semester_weeks %}disabled{% endif %}>
+                            <i class="fas fa-calendar-alt mr-2"></i> Сгенерировать расписание
+                        </button>
+                        {% if not data.courses or not data.semester_weeks %}
+                            <p class="mt-2 text-sm text-red-600">
+                                Для генерации расписания необходимо указать длительность семестра и добавить дисциплины
+                            </p>
+                        {% endif %}
+                    </div>
+                </form>
+
+                {% if data.schedule %}
+                    <div class="text-center my-4">
+                        <a href="{{ url_for('view_schedule') }}" class="inline-flex items-center px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200">
+                            <i class="fas fa-eye mr-2"></i> Просмотреть расписание
+                        </a>
+                    </div>
+                {% endif %}
+
+                <form action="{{ url_for('clear_data') }}" method="post" onsubmit="return confirm('Вы уверены, что хотите очистить все данные?');" class="text-center mt-8">
+                    <button type="submit" class="inline-flex items-center px-6 py-2 bg-red-600 hover:bg-red-700 text-white font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors duration-200">
+                        <i class="fas fa-trash mr-2"></i> Очистить все данные
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

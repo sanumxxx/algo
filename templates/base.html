@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Генератор расписания университета</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome для иконок -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Alpine.js для интерактивности -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            50: '#f0f9ff',
+                            100: '#e0f2fe',
+                            200: '#bae6fd',
+                            300: '#7dd3fc',
+                            400: '#38bdf8',
+                            500: '#0ea5e9',
+                            600: '#0284c7',
+                            700: '#0369a1',
+                            800: '#075985',
+                            900: '#0c4a6e',
+                        },
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        [x-cloak] { display: none !important; }
+
+        /* Стили для элементов расписания */
+        .lecture {
+            @apply bg-green-100 border-l-4 border-green-500;
+        }
+
+        .practice {
+            @apply bg-blue-100 border-l-4 border-blue-500;
+        }
+
+        /* Анимации для переходов */
+        .fade-enter {
+            @apply opacity-0;
+        }
+        .fade-enter-active {
+            @apply opacity-100 transition-opacity duration-300;
+        }
+        .fade-leave {
+            @apply opacity-100;
+        }
+        .fade-leave-active {
+            @apply opacity-0 transition-opacity duration-300;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="container mx-auto px-4 py-8 max-w-6xl">
+        <h1 class="text-3xl font-bold text-center text-gray-800 mb-8">Генератор расписания университета</h1>
+
+        <!-- Область для флеш-сообщений -->
+        <div id="flash-messages" class="mb-6">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="p-4 mb-2 rounded-md shadow {% if category == 'danger' %}bg-red-100 text-red-800{% elif category == 'success' %}bg-green-100 text-green-800{% else %}bg-blue-100 text-blue-800{% endif %}"
+                             x-data="{ show: true }"
+                             x-show="show"
+                             x-transition
+                             x-init="setTimeout(() => show = false, 5000)">
+                            <div class="flex items-center">
+                                <div class="flex-shrink-0">
+                                    {% if category == 'danger' %}
+                                        <i class="fas fa-exclamation-circle"></i>
+                                    {% elif category == 'success' %}
+                                        <i class="fas fa-check-circle"></i>
+                                    {% else %}
+                                        <i class="fas fa-info-circle"></i>
+                                    {% endif %}
+                                </div>
+                                <div class="ml-3">
+                                    <p class="text-sm">{{ message }}</p>
+                                </div>
+                                <div class="ml-auto pl-3">
+                                    <div class="-mx-1.5 -my-1.5">
+                                        <button @click="show = false" class="inline-flex rounded-md p-1.5 {% if category == 'danger' %}text-red-700 hover:bg-red-200{% elif category == 'success' %}text-green-700 hover:bg-green-200{% else %}text-blue-700 hover:bg-blue-200{% endif %} focus:outline-none">
+                                            <span class="sr-only">Закрыть</span>
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+        </div>
+
+        <!-- Основной контент -->
+        <div class="bg-white rounded-lg shadow-md p-6">
+            {% block content %}{% endblock %}
+        </div>
+
+        <!-- Подвал -->
+        <footer class="mt-10 text-center text-gray-500 text-sm">
+            <p>Генератор расписания университета © 2025</p>
+        </footer>
+    </div>
+
+    <!-- Дополнительные скрипты -->
+    {% block scripts %}{% endblock %}
+</body>
+</html>

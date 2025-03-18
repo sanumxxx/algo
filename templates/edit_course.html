@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="flex items-center mb-6">
+    <a href="{{ url_for('index') }}" class="flex items-center text-primary-600 hover:text-primary-800 mr-4">
+        <i class="fas fa-arrow-left mr-2"></i> Вернуться
+    </a>
+    <h2 class="text-2xl font-semibold text-gray-800">Редактирование дисциплины</h2>
+</div>
+
+<div class="bg-gray-50 p-6 rounded-lg shadow-sm">
+    <form action="{{ url_for('update_course', course_id=course.id) }}" method="post">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                <label for="course_name" class="block text-sm font-medium text-gray-700 mb-2">Название дисциплины:</label>
+                <input type="text" id="course_name" name="name" required value="{{ course.name }}" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500">
+            </div>
+            <div>
+                <label for="professor_id" class="block text-sm font-medium text-gray-700 mb-2">Преподаватель:</label>
+                <select id="professor_id" name="professor_id" required class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500">
+                    {% for professor in data.professors %}
+                        <option value="{{ professor.id }}" {% if professor.id == course.professor_id %}selected{% endif %}>
+                            {{ professor.name }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <div class="mt-4">
+            <label for="classrooms" class="block text-sm font-medium text-gray-700 mb-2">Возможные аудитории:</label>
+            <select multiple id="classrooms" name="classrooms" required class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500">
+                {% for classroom in data.classrooms %}
+                    <option value="{{ classroom.id }}"
+                        {% if classroom.id in course.possible_classrooms %}selected{% endif %}>
+                        {{ classroom.name }} (Вместимость: {{ classroom.capacity }})
+                    </option>
+                {% endfor %}
+            </select>
+            <p class="mt-1 text-xs text-gray-500">Удерживайте Ctrl (Windows) или Cmd (Mac) для выбора нескольких вариантов.</p>
+        </div>
+
+        <div class="mt-4">
+            <label for="groups" class="block text-sm font-medium text-gray-700 mb-2">Группы:</label>
+            <select multiple id="groups" name="groups" required class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500">
+                {% for group in data.groups %}
+                    <option value="{{ group.id }}"
+                        {% if 'groups' in course and group.id in course.groups %}selected{% endif %}>
+                        {{ group.name }} ({{ group.students_count }} студентов)
+                    </option>
+                {% endfor %}
+            </select>
+            <p class="mt-1 text-xs text-gray-500">Удерживайте Ctrl (Windows) или Cmd (Mac) для выбора нескольких вариантов.</p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+            <div>
+                <label for="lecture_count" class="block text-sm font-medium text-gray-700 mb-2">Количество лекций:</label>
+                <input type="number" id="lecture_count" name="lecture_count" required min="0" value="{{ course.lecture_count }}" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500">
+            </div>
+            <div>
+                <label for="practice_count" class="block text-sm font-medium text-gray-700 mb-2">Количество практик:</label>
+                <input type="number" id="practice_count" name="practice_count" required min="0" value="{{ course.practice_count }}" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500">
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+            <div>
+                <label for="start_week" class="block text-sm font-medium text-gray-700 mb-2">Начальная неделя:</label>
+                <input type="number" id="start_week" name="start_week" required min="1" max="{{ data.semester_weeks }}" value="{{ course.start_week }}" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500">
+            </div>
+            <div>
+                <label for="periodicity" class="block text-sm font-medium text-gray-700 mb-2">Периодичность:</label>
+                <select id="periodicity" name="periodicity" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500">
+                    <option value="weekly" {% if course.periodicity == 'weekly' %}selected{% endif %}>Еженедельно</option>
+                    <option value="biweekly" {% if course.periodicity == 'biweekly' %}selected{% endif %}>Раз в две недели</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="flex justify-center space-x-4 mt-8">
+            <button type="submit" class="bg-primary-600 hover:bg-primary-700 text-white font-medium py-2 px-6 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors duration-200">
+                <i class="fas fa-save mr-2"></i> Сохранить изменения
+            </button>
+            <a href="{{ url_for('index') }}" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 px-6 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-400 transition-colors duration-200">
+                Отмена
+            </a>
+        </div>
+    </form>
+
+    <form action="{{ url_for('delete_course', course_id=course.id) }}" method="post" class="mt-8 text-center" x-data="{ confirmDelete: false }">
+        <div x-show="!confirmDelete">
+            <button type="button" @click="confirmDelete = true" class="bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-6 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors duration-200">
+                <i class="fas fa-trash mr-2"></i> Удалить дисциплину
+            </button>
+        </div>
+        <div x-show="confirmDelete" class="bg-red-50 p-4 border border-red-200 rounded-md">
+            <p class="text-red-700 mb-3">Вы уверены, что хотите удалить эту дисциплину?</p>
+            <div class="flex justify-center space-x-4">
+                <button type="submit" class="bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors duration-200">
+                    Да, удалить
+                </button>
+                <button type="button" @click="confirmDelete = false" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 px-4 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-400 transition-colors duration-200">
+                    Отмена
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}
