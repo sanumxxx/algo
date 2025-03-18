@@ -1,0 +1,255 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div x-data="{ activeWeek: 1 }">
+    <div class="flex items-center mb-6">
+        <a href="{{ url_for('index') }}" class="flex items-center text-primary-600 hover:text-primary-800 mr-4">
+            <i class="fas fa-arrow-left mr-2"></i> Вернуться
+        </a>
+        <h2 class="text-2xl font-semibold text-gray-800">Сгенерированное расписание</h2>
+    </div>
+
+    <!-- Вкладки навигации по неделям -->
+    <div class="border-b border-gray-200 mb-6">
+        <div class="flex flex-nowrap overflow-x-auto pb-1">
+            {% for week in range(1, data.semester_weeks + 1) %}
+                <button @click="activeWeek = {{ week }}" :class="{ 'border-primary-500 text-primary-600': activeWeek === {{ week }}, 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300': activeWeek !== {{ week }} }" class="py-2 px-4 font-medium text-sm border-b-2 whitespace-nowrap focus:outline-none transition-colors duration-200">
+                    Неделя {{ week }}
+                </button>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Содержимое для каждой недели -->
+    {% for week in range(1, data.semester_weeks + 1) %}
+        <div x-show="activeWeek === {{ week }}" x-transition>
+            <h3 class="text-xl font-medium text-gray-800 mb-4">Расписание на неделю {{ week }}</h3>
+
+            <div class="overflow-x-auto bg-white rounded-lg shadow">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24">Время</th>
+                            <th scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Понедельник</th>
+                            <th scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Вторник</th>
+                            <th scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Среда</th>
+                            <th scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Четверг</th>
+                            <th scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Пятница</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        {% for period in range(8) %}
+                            <tr class="{% if period % 2 == 0 %}bg-white{% else %}bg-gray-50{% endif %}">
+                                <td class="px-3 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                    Пара {{ period + 1 }}
+                                </td>
+                                {% for day in range(5) %}
+                                    <td class="px-3 py-2 text-sm text-gray-500 border-l border-gray-200">
+                                        <!-- Диагностическая информация -->
+                                        {% set cell_found = false %}
+
+                                        {% for course_id_str, slots in data.schedule.items() %}
+                                            {% for c in data.courses %}
+                                                {% if c.id|string == course_id_str %}
+                                                    {% set course = c %}
+
+                                                    {% for slot in slots %}
+                                                        {% if slot.week == week and slot.day == day and slot.period == period %}
+                                                            {% set cell_found = true %}
+                                                            {% set classroom = get_classroom_by_id(slot.classroom_id) %}
+                                                            {% set professor = get_professor_by_id(course.professor_id) %}
+                                                            {% set groups = get_groups_by_ids(slot.groups) %}
+
+                                                            <div class="p-2 mb-1 rounded-md {% if slot.type == 'lecture' %}bg-green-100 border-l-4 border-green-500{% else %}bg-blue-100 border-l-4 border-blue-500{% endif %}">
+                                                                <div class="font-semibold text-sm">{{ course.name }}</div>
+                                                                <div class="text-xs mt-1">
+                                                                    <div class="flex items-center text-gray-600">
+                                                                        <i class="fas {% if slot.type == 'lecture' %}fa-chalkboard-teacher{% else %}fa-flask{% endif %} w-4"></i>
+                                                                        <span>{{ 'Лекция' if slot.type == 'lecture' else 'Практика' }}</span>
+                                                                    </div>
+                                                                    <div class="flex items-center text-gray-600">
+                                                                        <i class="fas fa-door-open w-4"></i>
+                                                                        <span>Ауд: {{ classroom.name if classroom else 'Неизвестно' }}</span>
+                                                                    </div>
+                                                                    {% if groups %}
+                                                                        <div class="flex items-center text-gray-600">
+                                                                            <i class="fas fa-users w-4"></i>
+                                                                            <span class="truncate">
+                                                                                {% set group_names = [] %}
+                                                                                {% for group in groups %}
+                                                                                    {% set _ = group_names.append(group.name) %}
+                                                                                {% endfor %}
+                                                                                {{ group_names|join(", ") }}
+                                                                            </span>
+                                                                        </div>
+                                                                    {% endif %}
+                                                                    <div class="flex items-center text-gray-600">
+                                                                        <i class="fas fa-user-tie w-4"></i>
+                                                                        <span>{{ professor.name if professor else 'Неизвестно' }}</span>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        {% endif %}
+                                                    {% endfor %}
+                                                {% endif %}
+                                            {% endfor %}
+                                        {% endfor %}
+
+                                        {% if not cell_found and week == 1 and day == 0 and period == 3 %}
+                                            <div class="text-xs text-red-500">
+                                                Ячейка пуста (ожидалось занятие)
+                                            </div>
+                                        {% endif %}
+                                    </td>
+                                {% endfor %}
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    {% endfor %}
+
+    <!-- Сводная информация по дисциплинам -->
+    <div class="mt-8 bg-white rounded-lg shadow p-6">
+        <h3 class="text-xl font-medium text-gray-800 mb-4">Сводная информация по дисциплинам</h3>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Дисциплина</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Преподаватель</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Группы</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Лекции</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Практики</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Всего запланировано</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    {% for course in data.courses %}
+                        {% set professor = get_professor_by_id(course.professor_id) %}
+                        {% set course_key = course.id|string %}
+
+                        {% set scheduled_lectures = 0 %}
+                        {% set scheduled_practices = 0 %}
+                        {% if course_key in data.schedule %}
+                            {% for slot in data.schedule[course_key] %}
+                                {% if slot.type == 'lecture' %}
+                                    {% set scheduled_lectures = scheduled_lectures + 1 %}
+                                {% else %}
+                                    {% set scheduled_practices = scheduled_practices + 1 %}
+                                {% endif %}
+                            {% endfor %}
+                        {% endif %}
+
+                        {% set groups = get_groups_by_ids(course.groups) %}
+
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ course.name }}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ professor.name if professor else 'Не указан' }}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                {% if groups %}
+                                    <div class="flex flex-wrap gap-1">
+                                        {% for group in groups %}
+                                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">{{ group.name }}</span>
+                                        {% endfor %}
+                                    </div>
+                                {% else %}
+                                    Не указаны
+                                {% endif %}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {% if scheduled_lectures >= course.lecture_count %}bg-green-100 text-green-800{% else %}bg-yellow-100 text-yellow-800{% endif %}">
+                                    {{ scheduled_lectures }} / {{ course.lecture_count }}
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {% if scheduled_practices >= course.practice_count %}bg-green-100 text-green-800{% else %}bg-yellow-100 text-yellow-800{% endif %}">
+                                    {{ scheduled_practices }} / {{ course.practice_count }}
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {% if (scheduled_lectures + scheduled_practices) >= (course.lecture_count + course.practice_count) %}bg-green-100 text-green-800{% else %}bg-yellow-100 text-yellow-800{% endif %}">
+                                    {{ scheduled_lectures + scheduled_practices }} / {{ course.lecture_count + course.practice_count }}
+                                </span>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Диагностический блок -->
+    <div class="mt-8 bg-yellow-50 p-4 border border-yellow-200 rounded-md">
+        <h3 class="text-lg font-medium text-yellow-800">Диагностическая информация</h3>
+        <div class="mt-2 text-sm text-yellow-600">
+            <p>Ключи расписания: {{ data.schedule.keys()|list }}</p>
+            <p>Количество курсов: {{ data.courses|length }}</p>
+            <p>ID первого курса: {{ data.courses[0].id if data.courses else 'Нет курсов' }}</p>
+
+            {% for course_id_str, slots in data.schedule.items() %}
+                <div class="mt-2 p-2 bg-yellow-100 rounded">
+                    <p>Ключ расписания: {{ course_id_str }} ({{ course_id_str|class_name }})</p>
+                    <p>Количество слотов: {{ slots|length }}</p>
+                    {% set matched = false %}
+                    {% for course in data.courses %}
+                        {% if course.id|string == course_id_str %}
+                            <p class="text-green-600">Найден соответствующий курс: {{ course.name }} (ID: {{ course.id }})</p>
+                            {% set matched = true %}
+                        {% endif %}
+                    {% endfor %}
+                    {% if not matched %}
+                        <p class="text-red-600">Не найден соответствующий курс для ID: {{ course_id_str }}</p>
+                    {% endif %}
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Кнопки управления -->
+    <div class="flex justify-center space-x-4 mt-6">
+        <button onclick="window.print()" class="inline-flex items-center px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-400 transition-colors duration-200">
+            <i class="fas fa-print mr-2"></i> Распечатать расписание
+        </button>
+
+        <a href="{{ url_for('index') }}" class="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200">
+            <i class="fas fa-cog mr-2"></i> Вернуться к настройкам
+        </a>
+    </div>
+</div>
+
+<style>
+    /* Стили для печати */
+    @media print {
+        body * {
+            visibility: hidden;
+        }
+
+        .container, .container * {
+            visibility: visible;
+        }
+
+        a, button {
+            display: none !important;
+        }
+
+        .container {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            max-width: 100%;
+            padding: 0;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('Debug schedule data:', {{ data.schedule|tojson }});
+    });
+</script>
+{% endblock %}
