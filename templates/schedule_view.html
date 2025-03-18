@@ -1,0 +1,284 @@
+{% extends "layout.html" %}
+
+{% block title %}Расписание - Система управления расписанием{% endblock %}
+
+{% block content %}
+<div class="bg-white shadow-lg rounded-lg p-6">
+    <h1 class="text-2xl font-bold text-indigo-800 mb-6">
+        <i class="fas fa-calendar-week mr-2"></i>
+        Просмотр расписания
+    </h1>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
+            <h2 class="text-lg font-semibold text-indigo-700 mb-2">Группа</h2>
+            <select id="group-select" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                <option value="">Выберите группу</option>
+                {% for group in groups %}
+                    <option value="{{ group.id }}">{{ group.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
+            <h2 class="text-lg font-semibold text-indigo-700 mb-2">Неделя</h2>
+            <select id="week-select" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                <option value="">Выберите неделю</option>
+                {% for week in weeks %}
+                    <option value="{{ week }}">Неделя {{ week }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+
+    <div id="schedule-container" class="hidden">
+        <div class="bg-indigo-50 p-4 rounded-lg border border-indigo-100 mb-4">
+            <div class="flex justify-between items-center">
+                <h2 class="text-lg font-semibold text-indigo-800">
+                    Расписание: <span id="group-name"></span>, Неделя <span id="week-number"></span>
+                </h2>
+                <div>
+                    <button id="print-schedule" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded-lg transition duration-300 text-sm">
+                        <i class="fas fa-print mr-1"></i> Печать
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="min-w-full bg-white border border-gray-200">
+                <thead>
+                    <tr class="bg-gray-100">
+                        <th class="w-20 px-2 py-3 border-b border-r border-gray-200 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Время</th>
+                        <th class="px-3 py-3 border-b border-r border-gray-200 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Понедельник</th>
+                        <th class="px-3 py-3 border-b border-r border-gray-200 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Вторник</th>
+                        <th class="px-3 py-3 border-b border-r border-gray-200 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Среда</th>
+                        <th class="px-3 py-3 border-b border-r border-gray-200 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Четверг</th>
+                        <th class="px-3 py-3 border-b border-gray-200 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Пятница</th>
+                    </tr>
+                </thead>
+                <tbody id="schedule-body">
+                    <!-- Строки расписания будут добавлены динамически -->
+                </tbody>
+            </table>
+        </div>
+
+        <div class="mt-4 bg-gray-50 p-3 rounded-lg border border-gray-200">
+            <h3 class="text-sm font-semibold text-gray-700 mb-2">Обозначения:</h3>
+            <div class="flex flex-wrap gap-2">
+                <span class="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded">Лекция</span>
+                <span class="bg-green-100 text-green-800 text-xs font-medium px-2.5 py-0.5 rounded">Практика</span>
+                <span class="bg-purple-100 text-purple-800 text-xs font-medium px-2.5 py-0.5 rounded">Лабораторная</span>
+            </div>
+        </div>
+    </div>
+
+    <div id="empty-schedule" class="text-center py-10 hidden">
+        <div class="text-gray-400 text-6xl mb-4">
+            <i class="fas fa-calendar-times"></i>
+        </div>
+        <h2 class="text-xl font-bold text-gray-500 mb-2">Расписание не найдено</h2>
+        <p class="text-gray-500">Выберите группу и неделю для просмотра расписания</p>
+    </div>
+
+    <div id="initial-state" class="text-center py-10">
+        <div class="text-gray-300 text-6xl mb-4">
+            <i class="fas fa-calendar"></i>
+        </div>
+        <h2 class="text-xl font-bold text-gray-400 mb-2">Выберите параметры для просмотра</h2>
+        <p class="text-gray-400">Укажите группу и неделю для отображения расписания</p>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Время пар
+    const timeSlots = [
+        "8:30 - 10:05",
+        "10:15 - 11:50",
+        "12:00 - 13:35",
+        "13:50 - 15:25",
+        "15:40 - 17:15",
+        "17:25 - 19:00",
+        "19:10 - 20:45"
+    ];
+
+    // Дни недели
+    const days = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница"];
+
+    // Цвета для типов занятий
+    const lessonTypeColors = {
+        "lecture": "bg-blue-100 text-blue-800",
+        "practice": "bg-green-100 text-green-800",
+        "lab": "bg-purple-100 text-purple-800"
+    };
+
+    // Локализация типов занятий
+    const lessonTypeNames = {
+        "lecture": "Лекция",
+        "practice": "Практика",
+        "lab": "Лабораторная"
+    };
+
+    // Отслеживаем выбор группы и недели
+    document.getElementById('group-select').addEventListener('change', fetchSchedule);
+    document.getElementById('week-select').addEventListener('change', fetchSchedule);
+
+    // Печать расписания
+    document.getElementById('print-schedule').addEventListener('click', printSchedule);
+
+    // Функция получения и отображения расписания
+    function fetchSchedule() {
+        const groupId = document.getElementById('group-select').value;
+        const week = document.getElementById('week-select').value;
+
+        if (!groupId || !week) {
+            return;
+        }
+
+        // Отображаем имя группы и номер недели
+        const groupName = document.getElementById('group-select').options[document.getElementById('group-select').selectedIndex].text;
+        document.getElementById('group-name').textContent = groupName;
+        document.getElementById('week-number').textContent = week;
+
+        // Запрашиваем расписание
+        fetch(`/schedule/data?group_id=${groupId}&week=${week}`)
+            .then(response => response.json())
+            .then(data => {
+                // Скрываем начальное состояние
+                document.getElementById('initial-state').classList.add('hidden');
+
+                if (data.length === 0) {
+                    // Показываем пустое расписание
+                    document.getElementById('schedule-container').classList.add('hidden');
+                    document.getElementById('empty-schedule').classList.remove('hidden');
+                } else {
+                    // Показываем расписание
+                    document.getElementById('schedule-container').classList.remove('hidden');
+                    document.getElementById('empty-schedule').classList.add('hidden');
+
+                    // Заполняем таблицу расписания
+                    buildScheduleTable(data);
+                }
+            })
+            .catch(error => {
+                console.error('Ошибка при получении расписания:', error);
+                alert('Произошла ошибка при загрузке расписания');
+            });
+    }
+
+    // Построение таблицы расписания
+    function buildScheduleTable(scheduleData) {
+        const scheduleBody = document.getElementById('schedule-body');
+        scheduleBody.innerHTML = '';
+
+        // Создаем сетку расписания
+        for (let timeSlot = 0; timeSlot < timeSlots.length; timeSlot++) {
+            const row = document.createElement('tr');
+            row.className = timeSlot % 2 === 0 ? 'bg-white' : 'bg-gray-50';
+
+            // Добавляем ячейку времени
+            const timeCell = document.createElement('td');
+            timeCell.className = 'px-2 py-3 border-b border-r border-gray-200 text-xs font-medium text-gray-700 text-center';
+            timeCell.textContent = timeSlots[timeSlot];
+            row.appendChild(timeCell);
+
+            // Добавляем ячейки для каждого дня
+            for (let day = 0; day < 5; day++) {
+                const cell = document.createElement('td');
+                cell.className = 'px-3 py-2 border-b border-r border-gray-200 text-sm';
+                cell.id = `cell-${day}-${timeSlot}`;
+
+                // Находим занятие для этого времени и дня
+                const lesson = scheduleData.find(item => item.day === day && item.time_slot === timeSlot);
+
+                if (lesson) {
+                    // Создаем содержимое ячейки с занятием
+                    const lessonDiv = document.createElement('div');
+                    lessonDiv.className = 'p-2 rounded-lg ' + (lessonTypeColors[lesson.lesson_type] || 'bg-gray-100');
+
+                    const typeSpan = document.createElement('span');
+                    typeSpan.className = 'text-xs font-semibold mb-1 block';
+                    typeSpan.textContent = lessonTypeNames[lesson.lesson_type] || lesson.lesson_type;
+                    lessonDiv.appendChild(typeSpan);
+
+                    const nameDiv = document.createElement('div');
+                    nameDiv.className = 'font-medium';
+                    nameDiv.textContent = lesson.course_name;
+                    lessonDiv.appendChild(nameDiv);
+
+                    const teacherDiv = document.createElement('div');
+                    teacherDiv.className = 'text-xs mt-1';
+                    teacherDiv.textContent = lesson.teacher_name;
+                    lessonDiv.appendChild(teacherDiv);
+
+                    const roomDiv = document.createElement('div');
+                    roomDiv.className = 'text-xs font-semibold mt-1';
+                    roomDiv.textContent = `Ауд. ${lesson.room_name}`;
+                    lessonDiv.appendChild(roomDiv);
+
+                    cell.appendChild(lessonDiv);
+                }
+
+                row.appendChild(cell);
+            }
+
+            scheduleBody.appendChild(row);
+        }
+    }
+
+    // Функция для печати расписания
+    function printSchedule() {
+        const groupName = document.getElementById('group-name').textContent;
+        const weekNumber = document.getElementById('week-number').textContent;
+
+        // Создаем стили для печати
+        const printStyles = `
+            <style>
+                @media print {
+                    body { font-family: Arial, sans-serif; }
+                    table { width: 100%; border-collapse: collapse; }
+                    th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
+                    th { background-color: #f2f2f2; }
+                    .print-header { text-align: center; margin-bottom: 20px; }
+                    .bg-blue-100 { background-color: #dbeafe !important; }
+                    .bg-green-100 { background-color: #dcfce7 !important; }
+                    .bg-purple-100 { background-color: #f3e8ff !important; }
+                    .text-blue-800, .text-green-800, .text-purple-800 { color: #000 !important; }
+                }
+            </style>
+        `;
+
+        // Получаем текущее содержимое таблицы
+        const scheduleTable = document.querySelector('#schedule-container table').cloneNode(true);
+
+        // Создаем новое окно для печати
+        const printWindow = window.open('', '_blank');
+        printWindow.document.write(`
+            <html>
+            <head>
+                <title>Расписание - ${groupName}, Неделя ${weekNumber}</title>
+                ${printStyles}
+            </head>
+            <body>
+                <div class="print-header">
+                    <h1>Расписание занятий</h1>
+                    <h2>Группа: ${groupName}, Неделя: ${weekNumber}</h2>
+                </div>
+                ${scheduleTable.outerHTML}
+            </body>
+            </html>
+        `);
+
+        printWindow.document.close();
+        printWindow.focus();
+
+        // Запускаем печать после загрузки содержимого
+        printWindow.onload = function() {
+            printWindow.print();
+            // printWindow.close();
+        };
+    }
+</script>
+{% endblock %}

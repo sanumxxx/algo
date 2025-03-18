@@ -1,0 +1,58 @@
+{% extends "layout.html" %}
+
+{% block title %}Преподаватели - Система управления расписанием{% endblock %}
+
+{% block content %}
+<div class="bg-white shadow-lg rounded-lg p-6">
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-2xl font-bold text-indigo-800">
+            <i class="fas fa-chalkboard-teacher mr-2"></i>
+            Преподаватели
+        </h1>
+        <a href="{{ url_for('add_teacher') }}" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg transition duration-300">
+            <i class="fas fa-plus mr-1"></i> Добавить преподавателя
+        </a>
+    </div>
+
+    {% if teachers %}
+        <div class="overflow-x-auto">
+            <table class="min-w-full bg-white">
+                <thead class="bg-indigo-50 text-indigo-800">
+                    <tr>
+                        <th class="py-3 px-4 text-left">ФИО</th>
+                        <th class="py-3 px-4 text-center">Кол-во дисциплин</th>
+                        <th class="py-3 px-4 text-right">Действия</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200">
+                    {% for teacher in teachers %}
+                        <tr class="hover:bg-gray-50">
+                            <td class="py-3 px-4">{{ teacher.name }}</td>
+                            <td class="py-3 px-4 text-center">{{ teacher.courses|length }}</td>
+                            <td class="py-3 px-4 text-right">
+                                <a href="{{ url_for('edit_teacher', id=teacher.id) }}" class="text-blue-600 hover:text-blue-800 mr-3">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                                <a href="{{ url_for('delete_teacher', id=teacher.id) }}" class="text-red-600 hover:text-red-800" onclick="return confirm('Вы уверены, что хотите удалить этого преподавателя?')">
+                                    <i class="fas fa-trash"></i>
+                                </a>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <div class="text-center py-8">
+            <div class="text-gray-400 text-6xl mb-4">
+                <i class="fas fa-user-slash"></i>
+            </div>
+            <h2 class="text-xl font-bold text-gray-500 mb-2">Нет преподавателей</h2>
+            <p class="text-gray-500 mb-4">Добавьте преподавателей, чтобы начать создание расписания</p>
+            <a href="{{ url_for('add_teacher') }}" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-lg transition duration-300">
+                <i class="fas fa-plus mr-1"></i> Добавить преподавателя
+            </a>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

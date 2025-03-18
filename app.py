@@ -1,717 +1,1065 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
-import os
-import json
+from flask import Flask, render_template, request, redirect, url_for, jsonify, flash
+from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy.orm import relationship
+from flask_wtf import FlaskForm
+from wtforms import StringField, IntegerField, SelectField, BooleanField, SubmitField, SelectMultipleField
+from wtforms.validators import DataRequired, NumberRange
+from flask_wtf.csrf import CSRFProtect
 from datetime import datetime, timedelta
+import random
+import copy
+import os
+import math
+import time
+from collections import defaultdict
 
 app = Flask(__name__)
-app.secret_key = 'university_schedule_generator_secret_key'
-
-# Путь к файлу с данными
-DATA_FILE = 'schedule_data.json'
-
-# Инициализация данных
-default_data = {
-    'semester_weeks': 0,
-    'professors': [],
-    'classrooms': [],
-    'groups': [],
-    'courses': [],
-    'schedule': {}
-}
+app.config['SECRET_KEY'] = os.urandom(24)
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///schedule.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+db = SQLAlchemy(app)
+csrf = CSRFProtect(app)
 
 
-# Функция для загрузки данных из файла
-def load_data():
-    if os.path.exists(DATA_FILE):
-        try:
-            with open(DATA_FILE, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except Exception as e:
-            print(f"Ошибка загрузки данных: {e}")
-            return default_data
-    return default_data
+# Модели данных
+class Teacher(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    courses = relationship("Course", back_populates="teacher")
+
+    def __repr__(self):
+        return f'<Teacher {self.name}>'
 
 
-# Функция для сохранения данных в файл
-def save_data(data_to_save):
-    try:
-        with open(DATA_FILE, 'w', encoding='utf-8') as f:
-            json.dump(data_to_save, f, ensure_ascii=False, indent=4)
-        return True
-    except Exception as e:
-        print(f"Ошибка сохранения данных: {e}")
-        return False
+class Group(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(50), nullable=False)
+    size = db.Column(db.Integer, nullable=False)
+    courses = relationship("CourseGroup", back_populates="group")
+
+    def __repr__(self):
+        return f'<Group {self.name}>'
 
 
-# Загрузка данных при запуске приложения
-data = load_data()
+class Room(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(50), nullable=False)
+    capacity = db.Column(db.Integer, nullable=False)
+    is_computer_lab = db.Column(db.Boolean, default=False)
+    is_lecture_hall = db.Column(db.Boolean, default=False)
+    is_lab = db.Column(db.Boolean, default=False)
+
+    def __repr__(self):
+        return f'<Room {self.name}>'
 
 
-# Вспомогательные функции
-def get_professor_by_id(professor_id):
-    """Получение преподавателя по ID с корректной обработкой типов."""
-    if professor_id is None:
-        return None
-
-    # Преобразуем ID к целому числу для сравнения
-    try:
-        professor_id = int(professor_id)
-    except (ValueError, TypeError):
-        return None
-
-    for professor in data['professors']:
-        if int(professor['id']) == professor_id:
-            return professor
-    return None
+# Связь между курсами и предпочтительными аудиториями
+course_preferred_rooms = db.Table('course_preferred_rooms',
+                                  db.Column('course_id', db.Integer, db.ForeignKey('course.id'), primary_key=True),
+                                  db.Column('room_id', db.Integer, db.ForeignKey('room.id'), primary_key=True)
+                                  )
 
 
-def get_groups_by_ids(group_ids):
-    """Получение групп по списку ID с корректной обработкой типов."""
-    if not group_ids:
-        return []
+class Course(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    teacher_id = db.Column(db.Integer, db.ForeignKey('teacher.id'), nullable=False)
+    teacher = relationship("Teacher", back_populates="courses")
+    lecture_count = db.Column(db.Integer, default=0)
+    practice_count = db.Column(db.Integer, default=0)
+    lab_count = db.Column(db.Integer, default=0)
+    start_week = db.Column(db.Integer, default=1)
+    distribution_type = db.Column(db.String(20), default='even')  # even, front_loaded, back_loaded, etc.
+    groups = relationship("CourseGroup", back_populates="course")
+    schedule_items = relationship("ScheduleItem", back_populates="course")
+    preferred_rooms = relationship("Room", secondary=course_preferred_rooms,
+                                   backref=db.backref('preferred_for_courses', lazy='dynamic'))
 
-    # Преобразуем все ID к целым числам для сравнения
-    try:
-        group_ids = [int(gid) for gid in group_ids]
-    except (ValueError, TypeError):
-        return []
-
-    result = []
-    for group in data['groups']:
-        if int(group['id']) in group_ids:
-            result.append(group)
-
-    return result
-
-
-def get_classroom_by_id(classroom_id):
-    """Получение аудитории по ID с корректной обработкой типов."""
-    if classroom_id is None:
-        return None
-
-    # Преобразуем ID к целому числу для сравнения
-    try:
-        classroom_id = int(classroom_id)
-    except (ValueError, TypeError):
-        return None
-
-    for classroom in data['classrooms']:
-        if int(classroom['id']) == classroom_id:
-            return classroom
-    return None
+    def __repr__(self):
+        return f'<Course {self.name}>'
 
 
-def get_course_by_id(course_id):
-    """Получение курса по ID с правильной обработкой типов."""
-    if course_id is None:
-        return None
+class CourseGroup(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    course_id = db.Column(db.Integer, db.ForeignKey('course.id'), nullable=False)
+    group_id = db.Column(db.Integer, db.ForeignKey('group.id'), nullable=False)
+    course = relationship("Course", back_populates="groups")
+    group = relationship("Group", back_populates="courses")
 
-    # Пробуем сравнивать как числа и как строки
-    for course in data['courses']:
-        if str(course['id']) == str(course_id):
-            return course
-    return None
+    def __repr__(self):
+        return f'<CourseGroup {self.course.name} - {self.group.name}>'
 
 
-# Добавление вспомогательных функций в контекст шаблонов
-@app.context_processor
-def utility_processor():
-    return {
-        'get_professor_by_id': get_professor_by_id,
-        'get_groups_by_ids': get_groups_by_ids,
-        'get_classroom_by_id': get_classroom_by_id,
-        'get_course_by_id': get_course_by_id
-    }
+class ScheduleItem(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    course_id = db.Column(db.Integer, db.ForeignKey('course.id'), nullable=False)
+    room_id = db.Column(db.Integer, db.ForeignKey('room.id'), nullable=False)
+    course = relationship("Course", back_populates="schedule_items")
+    room = relationship("Room")
+    week = db.Column(db.Integer, nullable=False)
+    day = db.Column(db.Integer, nullable=False)  # 0-4 (Понедельник-Пятница)
+    time_slot = db.Column(db.Integer, nullable=False)  # 0-7 (пары в день)
+    lesson_type = db.Column(db.String(10), nullable=False)  # lecture, practice, lab
+    groups = db.Column(db.String, nullable=False)  # Сериализованный список ID групп
+
+    def __repr__(self):
+        return f'<ScheduleItem {self.course.name} - Week {self.week}, Day {self.day}, Slot {self.time_slot}>'
+
+    def get_group_ids(self):
+        return [int(g) for g in self.groups.split(',')]
+
+
+class Settings(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    weeks_count = db.Column(db.Integer, default=18)
+    days_per_week = db.Column(db.Integer, default=5)
+    slots_per_day = db.Column(db.Integer, default=7)
+
+    def __repr__(self):
+        return f'<Settings weeks={self.weeks_count}>'
+
+
+# Формы
+class TeacherForm(FlaskForm):
+    name = StringField('ФИО преподавателя', validators=[DataRequired()])
+    submit = SubmitField('Сохранить')
+
+
+class GroupForm(FlaskForm):
+    name = StringField('Название группы', validators=[DataRequired()])
+    size = IntegerField('Численность', validators=[DataRequired(), NumberRange(min=1)])
+    submit = SubmitField('Сохранить')
+
+
+class RoomForm(FlaskForm):
+    name = StringField('Номер аудитории', validators=[DataRequired()])
+    capacity = IntegerField('Вместимость', validators=[DataRequired(), NumberRange(min=1)])
+    is_computer_lab = BooleanField('Компьютерный класс')
+    is_lecture_hall = BooleanField('Лекционная аудитория')
+    is_lab = BooleanField('Лабораторная')
+    submit = SubmitField('Сохранить')
+
+
+class CourseForm(FlaskForm):
+    name = StringField('Название дисциплины', validators=[DataRequired()])
+    teacher_id = SelectField('Преподаватель', coerce=int, validators=[DataRequired()])
+    lecture_count = IntegerField('Количество лекций', default=0)
+    practice_count = IntegerField('Количество практик', default=0)
+    lab_count = IntegerField('Количество лабораторных', default=0)
+    start_week = IntegerField('Начальная неделя', validators=[DataRequired(), NumberRange(min=1)])
+    distribution_type = SelectField('Распределение занятий', choices=[
+        ('even', 'По частоте (1 пр. в неделю, 1 лекция в 2 недели)'),
+        ('front_loaded', 'Больше занятий в начале семестра'),
+        ('back_loaded', 'Больше занятий в конце семестра'),
+        ('block', 'Блочное распределение (все занятия подряд)')
+    ])
+    groups = SelectMultipleField('Группы', coerce=int, validators=[DataRequired()])
+    preferred_rooms = SelectMultipleField('Предпочтительные аудитории', coerce=int)
+    submit = SubmitField('Сохранить')
+
+
+class SettingsForm(FlaskForm):
+    weeks_count = IntegerField('Количество недель', validators=[DataRequired(), NumberRange(min=1, max=52)])
+    submit = SubmitField('Сохранить')
 
 
 # Маршруты
 @app.route('/')
 def index():
-    return render_template('index.html', data=data)
+    settings = Settings.query.first()
+    if not settings:
+        settings = Settings(weeks_count=18)
+        db.session.add(settings)
+        db.session.commit()
+
+    teacher_count = Teacher.query.count()
+    group_count = Group.query.count()
+    room_count = Room.query.count()
+    course_count = Course.query.count()
+    schedule_exists = ScheduleItem.query.first() is not None
+
+    return render_template('index.html',
+                           settings=settings,
+                           teacher_count=teacher_count,
+                           group_count=group_count,
+                           room_count=room_count,
+                           course_count=course_count,
+                           schedule_exists=schedule_exists)
 
 
-@app.route('/set_semester', methods=['POST'])
-def set_semester():
-    weeks = int(request.form['weeks'])
-    data['semester_weeks'] = weeks
-    save_data(data)
-    flash(f'Семестр установлен на {weeks} недель')
-    return redirect(url_for('index'))
+@app.route('/settings', methods=['GET', 'POST'])
+def settings():
+    settings_record = Settings.query.first()
+    if not settings_record:
+        settings_record = Settings(weeks_count=18)
+        db.session.add(settings_record)
+        db.session.commit()
 
+    form = SettingsForm(obj=settings_record)
 
-@app.route('/add_professor', methods=['POST'])
-def add_professor():
-    name = request.form['name']
-    professor_id = max([p.get('id', 0) for p in data['professors']] + [0]) + 1
-    data['professors'].append({
-        'id': professor_id,
-        'name': name
-    })
-    save_data(data)
-    flash(f'Преподаватель {name} добавлен')
-    return redirect(url_for('index'))
-
-
-@app.route('/edit_professor/<int:professor_id>', methods=['POST'])
-def edit_professor(professor_id):
-    professor_index = None
-    for i, p in enumerate(data['professors']):
-        if int(p['id']) == professor_id:
-            professor_index = i
-            break
-
-    if professor_index is None:
-        flash('Преподаватель не найден', 'danger')
+    if form.validate_on_submit():
+        form.populate_obj(settings_record)
+        db.session.commit()
+        flash('Настройки успешно сохранены!', 'success')
         return redirect(url_for('index'))
 
-    name = request.form['name']
-    data['professors'][professor_index]['name'] = name
-    save_data(data)
-
-    flash(f'Преподаватель обновлен', 'success')
-    return redirect(url_for('index'))
+    return render_template('settings.html', form=form)
 
 
-@app.route('/delete_professor/<int:professor_id>', methods=['POST'])
-def delete_professor(professor_id):
-    professor_index = None
-    for i, p in enumerate(data['professors']):
-        if int(p['id']) == professor_id:
-            professor_index = i
-            break
-
-    if professor_index is None:
-        flash('Преподаватель не найден', 'danger')
-        return redirect(url_for('index'))
-
-    # Проверяем, используется ли преподаватель в дисциплинах
-    used_in_courses = []
-    for course in data['courses']:
-        if int(course.get('professor_id', 0)) == professor_id:
-            used_in_courses.append(course['name'])
-
-    if used_in_courses:
-        flash(f'Невозможно удалить преподавателя, так как он используется в дисциплинах: {", ".join(used_in_courses)}',
-              'danger')
-        return redirect(url_for('index'))
-
-    deleted_professor = data['professors'].pop(professor_index)
-    save_data(data)
-    flash(f'Преподаватель {deleted_professor["name"]} удален', 'success')
-    return redirect(url_for('index'))
+@app.route('/teachers')
+def teachers_list():
+    teachers = Teacher.query.all()
+    return render_template('teachers_list.html', teachers=teachers)
 
 
-@app.route('/add_classroom', methods=['POST'])
-def add_classroom():
-    name = request.form['name']
-    capacity = int(request.form['capacity'])
-    features = request.form.getlist('features')
-    classroom_id = max([c.get('id', 0) for c in data['classrooms']] + [0]) + 1
-    data['classrooms'].append({
-        'id': classroom_id,
-        'name': name,
-        'capacity': capacity,
-        'features': features
-    })
-    save_data(data)
-    flash(f'Аудитория {name} добавлена')
-    return redirect(url_for('index'))
+@app.route('/teachers/add', methods=['GET', 'POST'])
+def add_teacher():
+    form = TeacherForm()
+    if form.validate_on_submit():
+        teacher = Teacher(name=form.name.data)
+        db.session.add(teacher)
+        db.session.commit()
+        flash('Преподаватель успешно добавлен!', 'success')
+        return redirect(url_for('teachers_list'))
+    return render_template('teacher_form.html', form=form, title='Добавить преподавателя')
 
 
-@app.route('/edit_classroom/<int:classroom_id>', methods=['POST'])
-def edit_classroom(classroom_id):
-    classroom_index = None
-    for i, c in enumerate(data['classrooms']):
-        if int(c['id']) == classroom_id:
-            classroom_index = i
-            break
-
-    if classroom_index is None:
-        flash('Аудитория не найдена', 'danger')
-        return redirect(url_for('index'))
-
-    name = request.form['name']
-    capacity = int(request.form['capacity'])
-    features = request.form.getlist('features')
-
-    data['classrooms'][classroom_index]['name'] = name
-    data['classrooms'][classroom_index]['capacity'] = capacity
-    data['classrooms'][classroom_index]['features'] = features
-    save_data(data)
-
-    flash(f'Аудитория обновлена', 'success')
-    return redirect(url_for('index'))
+@app.route('/teachers/edit/<int:id>', methods=['GET', 'POST'])
+def edit_teacher(id):
+    teacher = Teacher.query.get_or_404(id)
+    form = TeacherForm(obj=teacher)
+    if form.validate_on_submit():
+        form.populate_obj(teacher)
+        db.session.commit()
+        flash('Данные преподавателя обновлены!', 'success')
+        return redirect(url_for('teachers_list'))
+    return render_template('teacher_form.html', form=form, title='Редактировать преподавателя')
 
 
-@app.route('/delete_classroom/<int:classroom_id>', methods=['POST'])
-def delete_classroom(classroom_id):
-    classroom_index = None
-    for i, c in enumerate(data['classrooms']):
-        if int(c['id']) == classroom_id:
-            classroom_index = i
-            break
-
-    if classroom_index is None:
-        flash('Аудитория не найдена', 'danger')
-        return redirect(url_for('index'))
-
-    # Проверяем, используется ли аудитория в дисциплинах
-    used_in_courses = []
-    for course in data['courses']:
-        if 'possible_classrooms' in course:
-            for c_id in course['possible_classrooms']:
-                if int(c_id) == classroom_id:
-                    used_in_courses.append(course['name'])
-                    break
-
-    if used_in_courses:
-        flash(f'Невозможно удалить аудиторию, так как она используется в дисциплинах: {", ".join(used_in_courses)}',
-              'danger')
-        return redirect(url_for('index'))
-
-    deleted_classroom = data['classrooms'].pop(classroom_index)
-    save_data(data)
-    flash(f'Аудитория {deleted_classroom["name"]} удалена', 'success')
-    return redirect(url_for('index'))
+@app.route('/teachers/delete/<int:id>')
+def delete_teacher(id):
+    teacher = Teacher.query.get_or_404(id)
+    db.session.delete(teacher)
+    db.session.commit()
+    flash('Преподаватель удален!', 'success')
+    return redirect(url_for('teachers_list'))
 
 
-@app.route('/add_group', methods=['POST'])
+@app.route('/groups')
+def groups_list():
+    groups = Group.query.all()
+    return render_template('groups_list.html', groups=groups)
+
+
+@app.route('/groups/add', methods=['GET', 'POST'])
 def add_group():
-    name = request.form['name']
-    students_count = int(request.form['students_count'])
-    group_id = max([g.get('id', 0) for g in data['groups']] + [0]) + 1
-    data['groups'].append({
-        'id': group_id,
-        'name': name,
-        'students_count': students_count
-    })
-    save_data(data)
-    flash(f'Группа {name} добавлена')
-    return redirect(url_for('index'))
+    form = GroupForm()
+    if form.validate_on_submit():
+        group = Group(name=form.name.data, size=form.size.data)
+        db.session.add(group)
+        db.session.commit()
+        flash('Группа успешно добавлена!', 'success')
+        return redirect(url_for('groups_list'))
+    return render_template('group_form.html', form=form, title='Добавить группу')
 
 
-@app.route('/edit_group/<int:group_id>', methods=['POST'])
-def edit_group(group_id):
-    group_index = None
-    for i, g in enumerate(data['groups']):
-        if int(g['id']) == group_id:
-            group_index = i
-            break
-
-    if group_index is None:
-        flash('Группа не найдена', 'danger')
-        return redirect(url_for('index'))
-
-    name = request.form['name']
-    students_count = int(request.form['students_count'])
-    data['groups'][group_index]['name'] = name
-    data['groups'][group_index]['students_count'] = students_count
-    save_data(data)
-
-    flash(f'Группа обновлена', 'success')
-    return redirect(url_for('index'))
+@app.route('/groups/edit/<int:id>', methods=['GET', 'POST'])
+def edit_group(id):
+    group = Group.query.get_or_404(id)
+    form = GroupForm(obj=group)
+    if form.validate_on_submit():
+        form.populate_obj(group)
+        db.session.commit()
+        flash('Данные группы обновлены!', 'success')
+        return redirect(url_for('groups_list'))
+    return render_template('group_form.html', form=form, title='Редактировать группу')
 
 
-@app.route('/delete_group/<int:group_id>', methods=['POST'])
-def delete_group(group_id):
-    group_index = None
-    for i, g in enumerate(data['groups']):
-        if int(g['id']) == group_id:
-            group_index = i
-            break
-
-    if group_index is None:
-        flash('Группа не найдена', 'danger')
-        return redirect(url_for('index'))
-
-    # Проверяем, используется ли группа в дисциплинах
-    used_in_courses = []
-    for course in data['courses']:
-        if 'groups' in course:
-            group_ids = [int(g) for g in course['groups']]
-            if group_id in group_ids:
-                used_in_courses.append(course['name'])
-
-    if used_in_courses:
-        flash(f'Невозможно удалить группу, так как она используется в дисциплинах: {", ".join(used_in_courses)}',
-              'danger')
-        return redirect(url_for('index'))
-
-    deleted_group = data['groups'].pop(group_index)
-    save_data(data)
-    flash(f'Группа {deleted_group["name"]} удалена', 'success')
-    return redirect(url_for('index'))
+@app.route('/groups/delete/<int:id>')
+def delete_group(id):
+    group = Group.query.get_or_404(id)
+    db.session.delete(group)
+    db.session.commit()
+    flash('Группа удалена!', 'success')
+    return redirect(url_for('groups_list'))
 
 
-@app.route('/add_course', methods=['POST'])
-def add_course():
-    name = request.form['name']
-    professor_id = int(request.form['professor_id'])
-    possible_classrooms = request.form.getlist('classrooms')
-    groups = request.form.getlist('groups')
-    lecture_count = int(request.form['lecture_count'])
-    practice_count = int(request.form['practice_count'])
-    start_week = int(request.form['start_week'])
-    periodicity = request.form.get('periodicity', 'weekly')
-
-    # Преобразуем ID в целые числа
-    possible_classrooms = [int(c) for c in possible_classrooms]
-    groups = [int(g) for g in groups]
-
-    course_id = max([c.get('id', 0) for c in data['courses']] + [0]) + 1
-    data['courses'].append({
-        'id': course_id,
-        'name': name,
-        'professor_id': professor_id,
-        'possible_classrooms': possible_classrooms,
-        'groups': groups,
-        'lecture_count': lecture_count,
-        'practice_count': practice_count,
-        'start_week': start_week,
-        'periodicity': periodicity
-    })
-    save_data(data)
-    flash(f'Дисциплина {name} добавлена')
-    return redirect(url_for('index'))
+@app.route('/rooms')
+def rooms_list():
+    rooms = Room.query.all()
+    return render_template('rooms_list.html', rooms=rooms)
 
 
-@app.route('/edit_course/<int:course_id>')
-def edit_course(course_id):
-    course = None
-    for c in data['courses']:
-        if int(c['id']) == course_id:
-            course = c
-            break
-
-    if not course:
-        flash('Дисциплина не найдена', 'danger')
-        return redirect(url_for('index'))
-
-    return render_template('edit_course.html', course=course, data=data)
-
-
-@app.route('/update_course/<int:course_id>', methods=['POST'])
-def update_course(course_id):
-    course_index = None
-    for i, c in enumerate(data['courses']):
-        if int(c['id']) == course_id:
-            course_index = i
-            break
-
-    if course_index is None:
-        flash('Дисциплина не найдена', 'danger')
-        return redirect(url_for('index'))
-
-    name = request.form['name']
-    professor_id = int(request.form['professor_id'])
-    possible_classrooms = request.form.getlist('classrooms')
-    groups = request.form.getlist('groups')
-    lecture_count = int(request.form['lecture_count'])
-    practice_count = int(request.form['practice_count'])
-    start_week = int(request.form['start_week'])
-    periodicity = request.form.get('periodicity', 'weekly')
-
-    # Преобразуем ID в целые числа
-    possible_classrooms = [int(c) for c in possible_classrooms]
-    groups = [int(g) for g in groups]
-
-    # Обновляем данные дисциплины
-    data['courses'][course_index] = {
-        'id': course_id,
-        'name': name,
-        'professor_id': professor_id,
-        'possible_classrooms': possible_classrooms,
-        'groups': groups,
-        'lecture_count': lecture_count,
-        'practice_count': practice_count,
-        'start_week': start_week,
-        'periodicity': periodicity
-    }
-
-    # Если дисциплина уже была в расписании, удаляем её
-    course_id_str = str(course_id)
-    if course_id_str in data['schedule']:
-        del data['schedule'][course_id_str]
-
-    save_data(data)
-    flash(f'Дисциплина {name} обновлена')
-    return redirect(url_for('index'))
-
-
-@app.route('/delete_course/<int:course_id>', methods=['POST'])
-def delete_course(course_id):
-    course_index = None
-    course_name = ""
-
-    for i, c in enumerate(data['courses']):
-        if int(c['id']) == course_id:
-            course_index = i
-            course_name = c['name']
-            break
-
-    if course_index is None:
-        flash('Дисциплина не найдена', 'danger')
-        return redirect(url_for('index'))
-
-    # Удаляем дисциплину
-    data['courses'].pop(course_index)
-
-    # Если дисциплина была в расписании, удаляем её
-    course_id_str = str(course_id)
-    if course_id_str in data['schedule']:
-        del data['schedule'][course_id_str]
-
-    save_data(data)
-    flash(f'Дисциплина {course_name} удалена')
-    return redirect(url_for('index'))
-
-
-@app.route('/generate_schedule', methods=['POST'])
-def generate_schedule():
-    schedule = generate_schedule_csp()
-    data['schedule'] = schedule
-    save_data(data)
-    flash('Расписание успешно сгенерировано')
-    return redirect(url_for('view_schedule'))
-
-
-@app.route('/view_schedule')
-def view_schedule():
-    return render_template('schedule.html', data=data)
-
-
-@app.route('/clear_data', methods=['POST'])
-def clear_data():
-    global data
-    data = default_data.copy()
-    save_data(data)
-    flash('Все данные очищены')
-    return redirect(url_for('index'))
-
-
-# Алгоритм генерации расписания на основе CSP
-def generate_schedule_csp():
-    # Инициализация пустого расписания
-    schedule = {}
-
-    # Получение данных
-    weeks = data['semester_weeks']
-    courses = data['courses']
-
-    # Создание трекера доступности ресурсов
-    # Формат: {week: {day: {period: {'professors': [ids], 'classrooms': [ids], 'groups': [ids]}}}}
-    availability = {}
-    for week in range(1, weeks + 1):
-        availability[week] = {}
-        for day in range(5):  # Понедельник - Пятница
-            availability[week][day] = {}
-            for period in range(8):  # 8 пар в день
-                availability[week][day][period] = {
-                    'professors': [int(p['id']) for p in data['professors']],
-                    'classrooms': [int(c['id']) for c in data['classrooms']],
-                    'groups': [int(g['id']) for g in data['groups']]
-                }
-
-    # Сортировка курсов по ограничениям (сначала самые ограниченные)
-    sorted_courses = sorted(
-        courses,
-        key=lambda c: (
-            c['start_week'],
-            -(c['lecture_count'] + c['practice_count']),  # Больше занятий = больше ограничений
-            -len(c.get('possible_classrooms', [])),  # Меньше аудиторий = больше ограничений
-            -len(c.get('groups', []))  # Меньше групп = больше ограничений
+@app.route('/rooms/add', methods=['GET', 'POST'])
+def add_room():
+    form = RoomForm()
+    if form.validate_on_submit():
+        room = Room(
+            name=form.name.data,
+            capacity=form.capacity.data,
+            is_computer_lab=form.is_computer_lab.data,
+            is_lecture_hall=form.is_lecture_hall.data,
+            is_lab=form.is_lab.data
         )
-    )
-
-    # Обработка каждого курса
-    for course in sorted_courses:
-        course_id = int(course['id'])
-        professor_id = int(course['professor_id'])
-        possible_classroom_ids = [int(c_id) for c_id in course.get('possible_classrooms', [])]
-        group_ids = [int(g_id) for g_id in course.get('groups', [])]
-        remaining_lectures = course['lecture_count']
-        remaining_practices = course['practice_count']
-        start_week = course['start_week']
-        periodicity = course.get('periodicity', 'weekly')
-
-        # Определить количество занятий на неделю в зависимости от периодичности
-        # и равномерно распределить занятия по всему семестру
-        available_weeks = max(1, weeks - start_week + 1)
-
-        # Определить периодичность проведения занятий
-        if periodicity == 'weekly':
-            week_step = 1  # каждую неделю
-        elif periodicity == 'biweekly':
-            week_step = 2  # через неделю
-        else:
-            week_step = 1  # по умолчанию каждую неделю
-
-        # Вычислить доступные недели с учетом периодичности
-        potential_weeks = list(range(start_week, weeks + 1, week_step))
-
-        # Планирование лекций и практик
-        lecture_weeks = distribute_sessions(remaining_lectures, potential_weeks)
-        practice_weeks = distribute_sessions(remaining_practices, potential_weeks)
-
-        # Расписание лекций
-        for week in lecture_weeks:
-            slot = find_best_slot_for_week(
-                professor_id, possible_classroom_ids, group_ids, week, availability
-            )
-
-            if slot:
-                # Обновить доступность
-                day = slot['day']
-                period = slot['period']
-                classroom_id = slot['classroom_id']
-
-                # Удалить ресурсы из доступных
-                availability[week][day][period]['professors'].remove(professor_id)
-                availability[week][day][period]['classrooms'].remove(classroom_id)
-
-                # Удалить группы из доступных
-                for group_id in group_ids:
-                    if group_id in availability[week][day][period]['groups']:
-                        availability[week][day][period]['groups'].remove(group_id)
-
-                # Добавить в расписание
-                course_key = str(course_id)  # Используем строку в качестве ключа
-                if course_key not in schedule:
-                    schedule[course_key] = []
-
-                schedule[course_key].append({
-                    'week': week,
-                    'day': day,
-                    'period': period,
-                    'classroom_id': classroom_id,
-                    'groups': group_ids,
-                    'type': 'lecture'
-                })
-            else:
-                print(f"Не удалось найти слот для лекции в неделю {week} для курса {course['name']}")
-
-        # Расписание практик
-        for week in practice_weeks:
-            slot = find_best_slot_for_week(
-                professor_id, possible_classroom_ids, group_ids, week, availability
-            )
-
-            if slot:
-                # Обновить доступность
-                day = slot['day']
-                period = slot['period']
-                classroom_id = slot['classroom_id']
-
-                # Удалить ресурсы из доступных
-                availability[week][day][period]['professors'].remove(professor_id)
-                availability[week][day][period]['classrooms'].remove(classroom_id)
-
-                # Удалить группы из доступных
-                for group_id in group_ids:
-                    if group_id in availability[week][day][period]['groups']:
-                        availability[week][day][period]['groups'].remove(group_id)
-
-                # Добавить в расписание
-                course_key = str(course_id)  # Используем строку в качестве ключа
-                if course_key not in schedule:
-                    schedule[course_key] = []
-
-                schedule[course_key].append({
-                    'week': week,
-                    'day': day,
-                    'period': period,
-                    'classroom_id': classroom_id,
-                    'groups': group_ids,
-                    'type': 'practice'
-                })
-            else:
-                print(f"Не удалось найти слот для практики в неделю {week} для курса {course['name']}")
-
-    return schedule
+        db.session.add(room)
+        db.session.commit()
+        flash('Аудитория успешно добавлена!', 'success')
+        return redirect(url_for('rooms_list'))
+    return render_template('room_form.html', form=form, title='Добавить аудиторию')
 
 
-# Функция для равномерного распределения занятий по неделям
-def distribute_sessions(session_count, available_weeks):
-    if session_count == 0 or not available_weeks:
-        return []
+@app.route('/rooms/edit/<int:id>', methods=['GET', 'POST'])
+def edit_room(id):
+    room = Room.query.get_or_404(id)
+    form = RoomForm(obj=room)
+    if form.validate_on_submit():
+        form.populate_obj(room)
+        db.session.commit()
+        flash('Данные аудитории обновлены!', 'success')
+        return redirect(url_for('rooms_list'))
+    return render_template('room_form.html', form=form, title='Редактировать аудиторию')
 
-    result = []
 
-    # Если занятий меньше чем недель, распределим их равномерно
-    if session_count <= len(available_weeks):
-        # Берем начало и равномерно распределенные недели
-        step = len(available_weeks) // session_count
-        for i in range(session_count):
-            idx = min(i * step, len(available_weeks) - 1)
-            result.append(available_weeks[idx])
+@app.route('/rooms/delete/<int:id>')
+def delete_room(id):
+    room = Room.query.get_or_404(id)
+    db.session.delete(room)
+    db.session.commit()
+    flash('Аудитория удалена!', 'success')
+    return redirect(url_for('rooms_list'))
+
+
+@app.route('/courses')
+def courses_list():
+    courses = Course.query.all()
+    return render_template('courses_list.html', courses=courses)
+
+
+@app.route('/courses/add', methods=['GET', 'POST'])
+def add_course():
+    form = CourseForm()
+    form.teacher_id.choices = [(t.id, t.name) for t in Teacher.query.all()]
+    form.groups.choices = [(g.id, g.name) for g in Group.query.all()]
+    form.preferred_rooms.choices = [(r.id, f"{r.name} (вместимость: {r.capacity})") for r in Room.query.all()]
+
+    if form.validate_on_submit():
+        # Создаем объект курса без preferred_rooms
+        course = Course(
+            name=form.name.data,
+            teacher_id=form.teacher_id.data,
+            lecture_count=form.lecture_count.data,
+            practice_count=form.practice_count.data,
+            lab_count=form.lab_count.data,
+            start_week=form.start_week.data,
+            distribution_type=form.distribution_type.data
+        )
+        db.session.add(course)
+        db.session.flush()  # Получаем ID курса без коммита
+
+        # Связываем курс с группами
+        for group_id in form.groups.data:
+            course_group = CourseGroup(course_id=course.id, group_id=group_id)
+            db.session.add(course_group)
+
+        # Связываем курс с предпочтительными аудиториями
+        if form.preferred_rooms.data:
+            for room_id in form.preferred_rooms.data:
+                room = Room.query.get(room_id)
+                if room:
+                    course.preferred_rooms.append(room)
+
+        db.session.commit()
+        flash('Дисциплина успешно добавлена!', 'success')
+        return redirect(url_for('courses_list'))
+
+    return render_template('course_form.html', form=form, title='Добавить дисциплину')
+
+
+@app.route('/courses/edit/<int:id>', methods=['GET', 'POST'])
+def edit_course(id):
+    course = Course.query.get_or_404(id)
+    form = CourseForm(obj=course)
+    form.teacher_id.choices = [(t.id, t.name) for t in Teacher.query.all()]
+    form.groups.choices = [(g.id, g.name) for g in Group.query.all()]
+    form.preferred_rooms.choices = [(r.id, f"{r.name} (вместимость: {r.capacity})") for r in Room.query.all()]
+
+    # Pre-populate groups and preferred rooms
+    if request.method == 'GET':
+        form.groups.data = [cg.group_id for cg in CourseGroup.query.filter_by(course_id=course.id).all()]
+        form.preferred_rooms.data = [room.id for room in course.preferred_rooms]
+
+    if form.validate_on_submit():
+        # Обновляем основные поля курса (кроме отношений)
+        course.name = form.name.data
+        course.teacher_id = form.teacher_id.data
+        course.lecture_count = form.lecture_count.data
+        course.practice_count = form.practice_count.data
+        course.lab_count = form.lab_count.data
+        course.start_week = form.start_week.data
+        course.distribution_type = form.distribution_type.data
+
+        # Update course groups
+        CourseGroup.query.filter_by(course_id=course.id).delete()
+        for group_id in form.groups.data:
+            course_group = CourseGroup(course_id=course.id, group_id=group_id)
+            db.session.add(course_group)
+
+        # Update preferred rooms
+        course.preferred_rooms = []  # Очищаем текущие связи
+        for room_id in form.preferred_rooms.data:
+            room = Room.query.get(room_id)
+            if room:
+                course.preferred_rooms.append(room)
+
+        db.session.commit()
+        flash('Данные дисциплины обновлены!', 'success')
+        return redirect(url_for('courses_list'))
+
+    return render_template('course_form.html', form=form, title='Редактировать дисциплину')
+
+
+@app.route('/courses/delete/<int:id>')
+def delete_course(id):
+    course = Course.query.get_or_404(id)
+    CourseGroup.query.filter_by(course_id=course.id).delete()
+    db.session.delete(course)
+    db.session.commit()
+    flash('Дисциплина удалена!', 'success')
+    return redirect(url_for('courses_list'))
+
+
+@app.route('/generate-schedule')
+def generate_schedule():
+    # Удалим существующее расписание
+    ScheduleItem.query.delete()
+    db.session.commit()
+
+    settings = Settings.query.first()
+    if not settings:
+        settings = Settings(weeks_count=18)
+        db.session.add(settings)
+        db.session.commit()
+
+    courses = Course.query.all()
+    rooms = Room.query.all()
+
+    if not courses or not rooms:
+        flash('Невозможно сгенерировать расписание. Добавьте дисциплины и аудитории.', 'error')
+        return redirect(url_for('index'))
+
+    # Генерация расписания с использованием оптимизированного алгоритма
+    schedule_generator = ScheduleGenerator(settings.weeks_count)
+    success = schedule_generator.generate()
+
+    if success:
+        flash('Расписание успешно сгенерировано!', 'success')
     else:
-        # Если занятий больше чем недель, используем все доступные недели,
-        # и повторно используем некоторые недели для оставшихся занятий
-        result = available_weeks.copy()
-        remaining = session_count - len(available_weeks)
+        flash('Не удалось сгенерировать расписание. Попробуйте изменить параметры.', 'error')
 
-        # Равномерно распределим оставшиеся занятия
-        for i in range(remaining):
-            idx = (i * len(available_weeks)) // remaining
-            result.append(available_weeks[idx])
-
-    return sorted(result)
+    return redirect(url_for('index'))
 
 
-def find_best_slot_for_week(professor_id, possible_classroom_ids, group_ids, week, availability):
-    # Найти и оценить все потенциальные слоты для конкретной недели
-    candidate_slots = []
+@app.route('/schedule')
+def view_schedule():
+    groups = Group.query.all()
+    settings = Settings.query.first()
+    if not settings:
+        settings = Settings(weeks_count=18)
+        db.session.add(settings)
+        db.session.commit()
 
-    for day in range(5):  # Понедельник - Пятница
-        for period in range(8):  # 8 пар в день
-            # Проверить доступность преподавателя
-            if professor_id not in availability[week][day][period]['professors']:
+    weeks = list(range(1, settings.weeks_count + 1))
+
+    return render_template('schedule_view.html', groups=groups, weeks=weeks)
+
+
+@app.route('/schedule/data')
+def schedule_data():
+    group_id = request.args.get('group_id', type=int)
+    week = request.args.get('week', type=int)
+
+    if not group_id or not week:
+        return jsonify({'error': 'Missing parameters'}), 400
+
+    # Получаем расписание для выбранной группы и недели
+    schedule_items = db.session.query(ScheduleItem).join(
+        Course
+    ).filter(
+        ScheduleItem.week == week,
+        ScheduleItem.groups.like(f'%{group_id}%')
+    ).all()
+
+    schedule_data = []
+    for item in schedule_items:
+        course = Course.query.get(item.course_id)
+        room = Room.query.get(item.room_id)
+
+        schedule_data.append({
+            'id': item.id,
+            'day': item.day,
+            'time_slot': item.time_slot,
+            'course_name': course.name,
+            'teacher_name': Teacher.query.get(course.teacher_id).name,
+            'room_name': room.name,
+            'lesson_type': item.lesson_type
+        })
+
+    return jsonify(schedule_data)
+
+
+# Класс для генерации расписания
+class ScheduleGenerator:
+    def __init__(self, weeks_count=18):
+        self.weeks_count = weeks_count
+        self.days_per_week = 5  # Пн-Пт
+        self.slots_per_day = 7  # 7 пар в день
+
+        # Получаем все необходимые данные
+        self.courses = Course.query.all()
+        self.rooms = Room.query.all()
+        self.teachers = Teacher.query.all()
+        self.groups = Group.query.all()
+
+        # Создаем пустое расписание
+        self.schedule = {}  # (week, day, slot) -> [schedule_items]
+
+        # Ограничения по времени и итерациям
+        self.max_generation_time = 30  # максимальное время генерации расписания в секундах
+        self.max_iterations = 1000  # максимальное количество итераций
+
+    def generate(self):
+        try:
+            start_time = time.time()
+            print("Начало генерации расписания...")
+
+            # Создаем начальное расписание с учетом частоты занятий
+            if not self._create_frequency_based_schedule():
+                print("Не удалось создать начальное расписание")
+                return False
+
+            print(f"Начальное расписание создано за {time.time() - start_time:.2f} сек.")
+
+            # Оптимизируем расписание, если есть время
+            if time.time() - start_time < self.max_generation_time:
+                print("Оптимизация размещения в дни недели...")
+                self._optimize_day_distribution()
+
+            # Сохраняем сгенерированное расписание в БД
+            self._save_schedule()
+            print(f"Расписание сгенерировано и сохранено за {time.time() - start_time:.2f} сек.")
+            return True
+        except Exception as e:
+            print(f"Ошибка при генерации расписания: {e}")
+            return False
+
+    def _create_frequency_based_schedule(self):
+        """Создаем расписание, исходя из частоты проведения занятий разных типов"""
+        # Для каждого курса определяем частоту занятий
+        for course in self.courses:
+            # Получаем базовую информацию
+            group_ids = [g.group_id for g in course.groups]
+            total_students = sum([Group.query.get(gid).size for gid in group_ids])
+
+            # Определяем доступные недели с учетом начальной недели курса
+            available_weeks = list(range(course.start_week, self.weeks_count + 1))
+
+            if not available_weeks:
+                print(f"Недостаточно недель для дисциплины {course.name}")
                 continue
 
-            # Найти доступные аудитории из возможных
-            available_classrooms = [
-                c_id for c_id in possible_classroom_ids
-                if c_id in availability[week][day][period]['classrooms']
-            ]
+            # Общее количество доступных недель - именно в этот диапазон нужно распределить занятия
+            total_weeks = len(available_weeks)
 
-            if not available_classrooms:
-                continue
+            print(f"Курс: {course.name}, начинается с недели {course.start_week}, доступно {total_weeks} недель")
 
-            # Проверить доступность всех групп
-            all_groups_available = True
-            for group_id in group_ids:
-                if group_id not in availability[week][day][period]['groups']:
-                    all_groups_available = False
+            # Рассчитываем частоту занятий
+            lessons_to_schedule = []
+
+            # Обрабатываем лекции
+            if course.lecture_count > 0:
+                # Рассчитываем частоту - как часто нужно проводить лекции
+                frequency = total_weeks / course.lecture_count
+                print(f"  Лекции: {course.lecture_count} шт., частота: одна лекция каждые {frequency:.2f} недели")
+
+                # Генерируем недели для лекций с учетом частоты
+                weeks = self._generate_weeks_with_frequency(
+                    course, 'lecture', frequency, available_weeks)
+
+                # Добавляем лекции в список занятий
+                for week in weeks:
+                    lessons_to_schedule.append({
+                        'course': course,
+                        'lesson_type': 'lecture',
+                        'group_ids': group_ids,
+                        'total_students': total_students,
+                        'target_week': week
+                    })
+
+            # Обрабатываем практики
+            if course.practice_count > 0:
+                # Рассчитываем частоту
+                frequency = total_weeks / course.practice_count
+                print(f"  Практики: {course.practice_count} шт., частота: одна практика каждые {frequency:.2f} недели")
+
+                # Генерируем недели для практик с учетом частоты
+                weeks = self._generate_weeks_with_frequency(
+                    course, 'practice', frequency, available_weeks)
+
+                # Добавляем практики в список занятий
+                for week in weeks:
+                    lessons_to_schedule.append({
+                        'course': course,
+                        'lesson_type': 'practice',
+                        'group_ids': group_ids,
+                        'total_students': total_students,
+                        'target_week': week
+                    })
+
+            # Обрабатываем лабораторные
+            if course.lab_count > 0:
+                # Рассчитываем частоту
+                frequency = total_weeks / course.lab_count
+                print(f"  Лабораторные: {course.lab_count} шт., частота: одна лаба каждые {frequency:.2f} недели")
+
+                # Генерируем недели для лабораторных с учетом частоты
+                weeks = self._generate_weeks_with_frequency(
+                    course, 'lab', frequency, available_weeks)
+
+                # Добавляем лабораторные в список занятий
+                for week in weeks:
+                    lessons_to_schedule.append({
+                        'course': course,
+                        'lesson_type': 'lab',
+                        'group_ids': group_ids,
+                        'total_students': total_students,
+                        'target_week': week
+                    })
+
+            # Выводим информацию о запланированных занятиях
+            lectures = [l for l in lessons_to_schedule if l['lesson_type'] == 'lecture']
+            practices = [l for l in lessons_to_schedule if l['lesson_type'] == 'practice']
+            labs = [l for l in lessons_to_schedule if l['lesson_type'] == 'lab']
+
+            if lectures:
+                print(f"  Недели лекций: {sorted([l['target_week'] for l in lectures])}")
+            if practices:
+                print(f"  Недели практик: {sorted([l['target_week'] for l in practices])}")
+            if labs:
+                print(f"  Недели лабораторных: {sorted([l['target_week'] for l in labs])}")
+
+            # Размещаем все занятия курса
+            for lesson in lessons_to_schedule:
+                if not self._place_lesson(lesson):
+                    print(
+                        f"  ОШИБКА: Не удалось разместить занятие {course.name} {lesson['lesson_type']} на неделе {lesson['target_week']}")
+
+        # Анализируем распределение
+        self._analyze_distribution()
+
+        return True
+
+    def _generate_weeks_with_frequency(self, course, lesson_type, frequency, available_weeks):
+        """Генерирует список недель для занятий с учетом их частоты"""
+        # Получаем количество занятий данного типа
+        if lesson_type == 'lecture':
+            count = course.lecture_count
+        elif lesson_type == 'practice':
+            count = course.practice_count
+        else:  # lab
+            count = course.lab_count
+
+        # Если занятий нет, возвращаем пустой список
+        if count == 0 or not available_weeks:
+            return []
+
+        # Обработка в зависимости от типа распределения
+        if course.distribution_type == 'even':
+            # Для равномерного распределения вычисляем оптимальный интервал
+            # с учетом доступных недель и количества занятий
+
+            # Число недель между занятиями (может быть дробным)
+            exact_interval = len(available_weeks) / count
+
+            # Генерируем недели с точным интервалом
+            weeks = []
+            for i in range(count):
+                # Вычисляем индекс с использованием дробного интервала для максимальной равномерности
+                index = int(i * exact_interval)
+                if index < len(available_weeks):
+                    weeks.append(available_weeks[index])
+                else:
+                    # Если выходим за пределы, берем последнюю неделю
+                    weeks.append(available_weeks[-1])
+
+            return weeks
+
+        elif course.distribution_type == 'front_loaded':
+            # Для front_loaded концентрируем занятия в начале доступного периода
+            weeks = []
+            for i in range(count):
+                index = int((i / count) ** 1.5 * len(available_weeks))
+                weeks.append(available_weeks[min(index, len(available_weeks) - 1)])
+
+            return weeks
+
+        elif course.distribution_type == 'back_loaded':
+            # Для back_loaded концентрируем занятия в конце доступного периода
+            weeks = []
+            for i in range(count):
+                index = int((1 - ((count - i - 1) / count) ** 1.5) * len(available_weeks))
+                weeks.append(available_weeks[min(index, len(available_weeks) - 1)])
+
+            return weeks
+
+        elif course.distribution_type == 'block':
+            # Для block распределения размещаем занятия последовательно в начале доступного периода
+            return available_weeks[:min(count, len(available_weeks))]
+
+        # По умолчанию используем равномерное распределение
+        # (с дробным интервалом для максимальной равномерности)
+        exact_interval = len(available_weeks) / count
+        weeks = []
+        for i in range(count):
+            index = int(i * exact_interval)
+            if index < len(available_weeks):
+                weeks.append(available_weeks[index])
+            else:
+                weeks.append(available_weeks[-1])
+
+        return weeks
+
+    def _place_lesson(self, lesson):
+        """Пытается разместить занятие на неделе, указанной в lesson['target_week']"""
+        course = lesson['course']
+        lesson_type = lesson['lesson_type']
+        group_ids = lesson['group_ids']
+        total_students = lesson['total_students']
+        target_week = lesson.get('target_week')
+
+        if target_week is None:
+            print(f"Ошибка: не указана целевая неделя для занятия {course.name} {lesson_type}")
+            return False
+
+        # Находим подходящие аудитории
+        suitable_rooms = self._find_suitable_rooms(course, lesson_type, total_students)
+        if not suitable_rooms:
+            print(f"Нет подходящих аудиторий для {course.name} ({lesson_type})")
+            return False
+
+        # Пробуем найти место в указанной неделе
+        for day in range(self.days_per_week):
+            for slot in range(self.slots_per_day):
+                time_key = (target_week, day, slot)
+
+                # Проверяем ограничения
+                if self._check_constraints(time_key, course, group_ids, suitable_rooms):
+                    # Выбираем аудиторию
+                    room = self._select_best_room(course, suitable_rooms, total_students)
+
+                    # Добавляем занятие в расписание
+                    if time_key not in self.schedule:
+                        self.schedule[time_key] = []
+
+                    self.schedule[time_key].append({
+                        'course': course,
+                        'room': room,
+                        'lesson_type': lesson_type,
+                        'groups': group_ids
+                    })
+
+                    return True
+
+        # Если не смогли разместить в текущую неделю, пробуем в ближайшие
+        for offset in range(1, 3):  # Проверяем до 2 недель в обе стороны
+            # Пробуем неделю раньше
+            earlier_week = target_week - offset
+            if earlier_week >= course.start_week:
+                for day in range(self.days_per_week):
+                    for slot in range(self.slots_per_day):
+                        time_key = (earlier_week, day, slot)
+                        if self._check_constraints(time_key, course, group_ids, suitable_rooms):
+                            room = self._select_best_room(course, suitable_rooms, total_students)
+                            if time_key not in self.schedule:
+                                self.schedule[time_key] = []
+                            self.schedule[time_key].append({
+                                'course': course,
+                                'room': room,
+                                'lesson_type': lesson_type,
+                                'groups': group_ids
+                            })
+                            return True
+
+            # Пробуем неделю позже
+            later_week = target_week + offset
+            if later_week <= self.weeks_count:
+                for day in range(self.days_per_week):
+                    for slot in range(self.slots_per_day):
+                        time_key = (later_week, day, slot)
+                        if self._check_constraints(time_key, course, group_ids, suitable_rooms):
+                            room = self._select_best_room(course, suitable_rooms, total_students)
+                            if time_key not in self.schedule:
+                                self.schedule[time_key] = []
+                            self.schedule[time_key].append({
+                                'course': course,
+                                'room': room,
+                                'lesson_type': lesson_type,
+                                'groups': group_ids
+                            })
+                            return True
+
+        # Не смогли разместить занятие
+        return False
+
+    def _optimize_day_distribution(self):
+        """Оптимизирует распределение занятий по дням недели"""
+        # Для этой версии просто перебалансируем нагрузку по дням недели
+        iterations = 0
+        start_time = time.time()
+
+        while iterations < self.max_iterations and time.time() - start_time < self.max_generation_time:
+            # Анализируем текущее распределение по дням недели
+            day_loads = self._analyze_day_distribution()
+
+            # Находим день с максимальной и минимальной нагрузкой
+            max_day = max(day_loads.items(), key=lambda x: x[1])[0]
+            min_day = min(day_loads.items(), key=lambda x: x[1])[0]
+
+            # Если разница невелика, завершаем оптимизацию
+            if day_loads[max_day] - day_loads[min_day] <= 1:
+                break
+
+            # Пробуем переместить занятие из дня с максимальной нагрузкой в день с минимальной
+            moved = False
+            for time_key, lessons in list(self.schedule.items()):
+                week, day, slot = time_key
+
+                # Ищем занятие в день с максимальной нагрузкой
+                if day == max_day:
+                    for lesson_idx, lesson in enumerate(lessons):
+                        # Проверяем, можно ли переместить это занятие в день с минимальной нагрузкой
+                        for new_slot in range(self.slots_per_day):
+                            new_key = (week, min_day, new_slot)
+
+                            # Проверяем ограничения для нового расположения
+                            if new_key not in self.schedule:
+                                self.schedule[new_key] = []
+
+                            # Временно удаляем занятие из текущего расписания
+                            self.schedule[time_key].pop(lesson_idx)
+                            if not self.schedule[time_key]:
+                                del self.schedule[time_key]
+
+                            # Пробуем разместить в новом месте
+                            suitable_rooms = self._find_suitable_rooms(
+                                lesson['course'], lesson['lesson_type'],
+                                sum([Group.query.get(gid).size for gid in lesson['groups']])
+                            )
+
+                            if suitable_rooms and self._check_constraints(
+                                    new_key, lesson['course'], lesson['groups'], suitable_rooms
+                            ):
+                                # Нашли подходящее место - перемещаем занятие
+                                lesson['room'] = self._select_best_room(
+                                    lesson['course'], suitable_rooms,
+                                    sum([Group.query.get(gid).size for gid in lesson['groups']])
+                                )
+                                self.schedule[new_key].append(lesson)
+                                moved = True
+                                break
+                            else:
+                                # Возвращаем занятие на место
+                                if time_key not in self.schedule:
+                                    self.schedule[time_key] = []
+                                self.schedule[time_key].insert(lesson_idx, lesson)
+
+                        if moved:
+                            break
+
+                if moved:
                     break
 
-            if not all_groups_available:
-                continue
+            # Если не смогли переместить ни одно занятие, завершаем оптимизацию
+            if not moved:
+                break
 
-            # Для простоты выберем первую доступную аудиторию
-            classroom_id = available_classrooms[0]
+            iterations += 1
 
-            # Вычислить оценку слота (меньше = лучше)
-            score = (
-                    abs(period - 3.5) * 10 +  # Предпочтение середине дня
-                    day * 5  # Небольшое предпочтение началу недели
-            )
+        print(f"Оптимизация дней завершена после {iterations} итераций.")
 
-            # Добавить к кандидатам
-            candidate_slots.append({
-                'week': week,
-                'day': day,
-                'period': period,
-                'classroom_id': classroom_id,
-                'score': score
-            })
+    def _analyze_day_distribution(self):
+        """Анализирует распределение занятий по дням недели"""
+        day_loads = {day: 0 for day in range(self.days_per_week)}
 
-    # Сортировка по оценке (меньше = лучше)
-    candidate_slots.sort(key=lambda s: s['score'])
+        for time_key, lessons in self.schedule.items():
+            week, day, slot = time_key
+            day_loads[day] += len(lessons)
 
-    # Вернуть лучший слот или None, если нет подходящих
-    return candidate_slots[0] if candidate_slots else None
+        return day_loads
+
+    def _analyze_distribution(self):
+        """Анализирует распределение занятий по неделям"""
+        week_loads = defaultdict(int)
+        course_distribution = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
+
+        for time_key, lessons in self.schedule.items():
+            week, day, slot = time_key
+            week_loads[week] += len(lessons)
+
+            for lesson in lessons:
+                course_id = lesson['course'].id
+                lesson_type = lesson['lesson_type']
+                course_distribution[course_id][lesson_type][week] += 1
+
+        # Вывод общей статистики
+        print("\n=== Распределение занятий по неделям ===")
+        for week, count in sorted(week_loads.items()):
+            print(f"Неделя {week}: {count} занятий")
+
+        # Вывод распределения по курсам
+        print("\n=== Распределение занятий по курсам ===")
+        for course_id, types in course_distribution.items():
+            course = Course.query.get(course_id)
+            print(f"\nКурс: {course.name}")
+
+            for lesson_type, weeks in types.items():
+                print(f"  {lesson_type.capitalize()}:")
+                for week, count in sorted(weeks.items()):
+                    print(f"    Неделя {week}: {count} занятий")
+
+    def _find_suitable_rooms(self, course, lesson_type, total_students):
+        """Находит подходящие аудитории с учетом предпочтений курса"""
+        suitable_rooms = []
+
+        # Сначала проверяем предпочтительные аудитории курса
+        preferred_rooms = list(course.preferred_rooms)
+        if preferred_rooms:
+            for room in preferred_rooms:
+                # Проверяем вместимость
+                if room.capacity < total_students:
+                    continue
+
+                # Проверяем тип аудитории
+                if lesson_type == "lecture" and not room.is_lecture_hall:
+                    continue
+                if lesson_type == "lab" and not room.is_lab:
+                    continue
+
+                suitable_rooms.append(room)
+
+        # Если подходящих предпочтительных аудиторий нет, ищем среди всех
+        if not suitable_rooms:
+            for room in self.rooms:
+                # Проверяем вместимость
+                if room.capacity < total_students:
+                    continue
+
+                # Проверяем тип аудитории
+                if lesson_type == "lecture" and not room.is_lecture_hall:
+                    continue
+                if lesson_type == "lab" and not room.is_lab:
+                    continue
+
+                if lesson_type == "lab" and room.is_computer_lab:
+                    suitable_rooms.insert(0, room)  # Компьютерные классы в приоритете для лабораторных
+                else:
+                    suitable_rooms.append(room)
+
+        return suitable_rooms
+
+    def _select_best_room(self, course, rooms, total_students):
+        """Выбирает наиболее подходящую аудиторию с учетом предпочтений"""
+        # Сначала проверяем предпочтительные аудитории
+        preferred_rooms = [room for room in rooms if room in course.preferred_rooms]
+        if preferred_rooms:
+            # Из предпочтительных выбираем наиболее подходящую по размеру
+            return min(preferred_rooms,
+                       key=lambda r: r.capacity - total_students if r.capacity >= total_students else float('inf'))
+
+        # Если предпочтительных нет или они не подходят, выбираем из всех доступных
+        return min(rooms, key=lambda r: r.capacity - total_students if r.capacity >= total_students else float('inf'))
+
+    def _check_constraints(self, time_key, course, group_ids, suitable_rooms):
+        """Проверяет жесткие и мягкие ограничения для размещения занятия"""
+        week, day, slot = time_key
+
+        # Если время уже занято в расписании
+        if time_key in self.schedule:
+            # Проверка доступности преподавателя
+            for item in self.schedule[time_key]:
+                if item['course'].teacher_id == course.teacher_id:
+                    return False
+
+                # Проверка доступности групп
+                for group_id in group_ids:
+                    if group_id in item['groups']:
+                        return False
+
+            # Проверка доступности аудиторий
+            occupied_rooms = [item['room'].id for item in self.schedule[time_key]]
+            if all(room.id in occupied_rooms for room in suitable_rooms):
+                return False
+
+        # Проверка мягких ограничений
+        # Например, не ставить более 3 пар одному преподавателю в день
+        teacher_lessons_today = 0
+        for check_slot in range(self.slots_per_day):
+            check_key = (week, day, check_slot)
+            if check_key in self.schedule:
+                for item in self.schedule[check_key]:
+                    if item['course'].teacher_id == course.teacher_id:
+                        teacher_lessons_today += 1
+
+        if teacher_lessons_today >= 3:
+            return False
+
+        # Не ставить больше 4 пар в день для одной группы
+        for group_id in group_ids:
+            group_lessons_today = 0
+            for check_slot in range(self.slots_per_day):
+                check_key = (week, day, check_slot)
+                if check_key in self.schedule:
+                    for item in self.schedule[check_key]:
+                        if group_id in item['groups']:
+                            group_lessons_today += 1
+
+            if group_lessons_today >= 4:
+                return False
+
+        return True
+
+    def _save_schedule(self):
+        """Сохраняет сгенерированное расписание в базу данных"""
+        for time_key, items in self.schedule.items():
+            week, day, slot = time_key
+
+            for item in items:
+                schedule_item = ScheduleItem(
+                    course_id=item['course'].id,
+                    room_id=item['room'].id,
+                    week=week,
+                    day=day,
+                    time_slot=slot,
+                    lesson_type=item['lesson_type'],
+                    groups=','.join(map(str, item['groups']))
+                )
+                db.session.add(schedule_item)
+
+        db.session.commit()
 
 
-# Запуск приложения
+# Создание базы данных при запуске приложения
+def create_tables():
+    with app.app_context():
+        db.create_all()
+
+        # Создаем настройки по умолчанию, если их нет
+        if not Settings.query.first():
+            settings = Settings(weeks_count=18)
+            db.session.add(settings)
+            db.session.commit()
+
+
 if __name__ == '__main__':
+    # Инициализация базы данных перед запуском приложения
+    create_tables()
     app.run(debug=True)
