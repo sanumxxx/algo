@@ -21,6 +21,7 @@
                     <tr>
                         <th class="py-3 px-4 text-left">Название группы</th>
                         <th class="py-3 px-4 text-center">Численность</th>
+                        <th class="py-3 px-4 text-center">Подгруппы для лаб. работ</th>
                         <th class="py-3 px-4 text-center">Кол-во дисциплин</th>
                         <th class="py-3 px-4 text-right">Действия</th>
                     </tr>
@@ -30,6 +31,24 @@
                         <tr class="hover:bg-gray-50">
                             <td class="py-3 px-4">{{ group.name }}</td>
                             <td class="py-3 px-4 text-center">{{ group.size }}</td>
+                            <td class="py-3 px-4 text-center">
+                                {% if group.lab_subgroups_count > 1 %}
+                                    <div class="text-center">
+                                        <span class="bg-purple-100 text-purple-800 text-xs font-medium px-2.5 py-0.5 rounded">
+                                            {{ group.lab_subgroups_count }} подгруппы
+                                        </span>
+                                        <div class="mt-1 space-y-1">
+                                            {% for subgroup in group.lab_subgroups %}
+                                                <div class="text-xs text-gray-600">
+                                                    {{ subgroup.name }}: {{ subgroup.size }} студ.
+                                                </div>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                {% else %}
+                                    <span class="text-gray-500">Нет</span>
+                                {% endif %}
+                            </td>
                             <td class="py-3 px-4 text-center">{{ group.courses|length }}</td>
                             <td class="py-3 px-4 text-right">
                                 <a href="{{ url_for('edit_group', id=group.id) }}" class="text-blue-600 hover:text-blue-800 mr-3">

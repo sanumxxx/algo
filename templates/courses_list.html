@@ -35,8 +35,17 @@
                                 {% set lecture_teacher = course.get_teacher_for_type('lecture') %}
                                 {% set practice_teacher = course.get_teacher_for_type('practice') %}
                                 {% set lab_teacher = course.get_teacher_for_type('lab') %}
+                                {% set lab_subgroup_teachers = course.get_all_lab_teachers() %}
+
+                                {% set has_subgroup_teachers = false %}
+                                {% for teacher in lab_subgroup_teachers %}
+                                    {% if teacher.lab_subgroup %}
+                                        {% set has_subgroup_teachers = true %}
+                                    {% endif %}
+                                {% endfor %}
 
                                 {% if lecture_teacher and practice_teacher and lab_teacher and
+                                      not has_subgroup_teachers and
                                       (lecture_teacher.id == practice_teacher.id == lab_teacher.id) %}
                                     <!-- Один преподаватель на все типы занятий -->
                                     {{ lecture_teacher.name }}
@@ -55,10 +64,34 @@
                                             </div>
                                         {% endif %}
 
-                                        {% if course.lab_count > 0 and lab_teacher %}
-                                            <div class="text-xs">
-                                                <span class="font-semibold">Лабораторные:</span> {{ lab_teacher.name }}
-                                            </div>
+                                        {% if course.lab_count > 0 %}
+                                            {% if has_subgroup_teachers %}
+                                                <!-- Преподаватели для подгрупп -->
+                                                <div class="text-xs">
+                                                    <span class="font-semibold">Лабораторные:</span>
+                                                </div>
+                                                <div class="pl-2 border-l-2 border-purple-200">
+                                                    {% for teacher in lab_subgroup_teachers %}
+                                                        {% if teacher.lab_subgroup %}
+                                                            <div class="text-xs">
+                                                                <span class="font-semibold text-purple-700">{{ teacher.lab_subgroup.name }}:</span>
+                                                                {{ teacher.teacher.name }}
+                                                            </div>
+                                                        {% endif %}
+                                                    {% endfor %}
+
+                                                    {% if lab_teacher %}
+                                                        <div class="text-xs">
+                                                            <span class="font-semibold text-gray-600">Остальные группы:</span>
+                                                            {{ lab_teacher.name }}
+                                                        </div>
+                                                    {% endif %}
+                                                </div>
+                                            {% elif lab_teacher %}
+                                                <div class="text-xs">
+                                                    <span class="font-semibold">Лабораторные:</span> {{ lab_teacher.name }}
+                                                </div>
+                                            {% endif %}
                                         {% endif %}
                                     </div>
                                 {% endif %}
@@ -69,6 +102,9 @@
                                 {% for course_group in course.groups %}
                                     <span class="bg-indigo-100 text-indigo-800 text-xs font-medium px-2.5 py-0.5 rounded mr-1 mb-1 inline-block">
                                         {{ course_group.group.name }}
+                                        {% if course_group.group.has_lab_subgroups() %}
+                                            <span class="text-xs text-indigo-600">(с подгр.)</span>
+                                        {% endif %}
                                     </span>
                                 {% endfor %}
                             </td>

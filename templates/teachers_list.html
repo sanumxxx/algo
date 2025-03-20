@@ -21,14 +21,89 @@
                     <tr>
                         <th class="py-3 px-4 text-left">ФИО</th>
                         <th class="py-3 px-4 text-center">Кол-во дисциплин</th>
+                        <th class="py-3 px-4 text-center">Детали нагрузки</th>
                         <th class="py-3 px-4 text-right">Действия</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-200">
                     {% for teacher in teachers %}
+                        {% set distinct_courses = {} %}
+                        {% for ct in teacher.courses %}
+                            {% if ct.course.name not in distinct_courses %}
+                                {% if distinct_courses.update({ct.course.name: 1}) %}{% endif %}
+                            {% endif %}
+                        {% endfor %}
+
                         <tr class="hover:bg-gray-50">
                             <td class="py-3 px-4">{{ teacher.name }}</td>
-                            <td class="py-3 px-4 text-center">{{ teacher.courses|length }}</td>
+                            <td class="py-3 px-4 text-center">
+                                {{ distinct_courses|length }}
+                            </td>
+                            <td class="py-3 px-4">
+                                {% if teacher.courses|length > 0 %}
+                                    <div class="flex justify-center">
+                                        <button class="text-indigo-600 hover:text-indigo-800 text-sm focus:outline-none"
+                                                onclick="toggleDetails('details-{{ teacher.id }}')">
+                                            <i class="fas fa-info-circle mr-1"></i> Показать детали
+                                        </button>
+                                    </div>
+                                    <div id="details-{{ teacher.id }}" class="hidden bg-gray-50 p-2 rounded-md mt-2 text-sm">
+                                        {% set grouped_courses = {} %}
+
+                                        <!-- Сначала сгруппируем курсы и их типы занятий -->
+                                        {% for ct in teacher.courses %}
+                                            {% if ct.course.name not in grouped_courses %}
+                                                {% if grouped_courses.update({ct.course.name: {'types': [], 'subgroups': []}}) %}{% endif %}
+                                            {% endif %}
+
+                                            {% if ct.lab_subgroup %}
+                                                {% if grouped_courses[ct.course.name]['subgroups'].append((ct.lab_subgroup.name, ct.lesson_type)) %}{% endif %}
+                                            {% else %}
+                                                {% if grouped_courses[ct.course.name]['types'].append(ct.lesson_type) %}{% endif %}
+                                            {% endif %}
+                                        {% endfor %}
+
+                                        <!-- Теперь выведем сгруппированные данные -->
+                                        {% for course_name, info in grouped_courses.items() %}
+                                            <div class="font-medium text-gray-700 mt-2 border-t border-gray-200 pt-2 first:border-t-0 first:pt-0">
+                                                {{ course_name }}
+                                            </div>
+
+                                            <!-- Типы занятий -->
+                                            {% if info['types']|length > 0 %}
+                                                <div class="ml-2 mt-1 flex flex-wrap gap-1">
+                                                    {% for lesson_type in info['types'] %}
+                                                        <span class="text-xs px-1.5 py-0.5 rounded
+                                                            {% if lesson_type == 'lecture' %}bg-blue-100 text-blue-700
+                                                            {% elif lesson_type == 'practice' %}bg-green-100 text-green-700
+                                                            {% elif lesson_type == 'lab' %}bg-purple-100 text-purple-700
+                                                            {% endif %}">
+                                                            {% if lesson_type == 'lecture' %}Лекции
+                                                            {% elif lesson_type == 'practice' %}Практики
+                                                            {% elif lesson_type == 'lab' %}Лабораторные
+                                                            {% endif %}
+                                                        </span>
+                                                    {% endfor %}
+                                                </div>
+                                            {% endif %}
+
+                                            <!-- Подгруппы -->
+                                            {% if info['subgroups']|length > 0 %}
+                                                <div class="ml-2 mt-1">
+                                                    <span class="text-xs font-medium text-gray-600">Подгруппы лабораторных:</span>
+                                                    <div class="ml-2 flex flex-wrap gap-1 mt-1">
+                                                        {% for subgroup_name, lesson_type in info['subgroups'] %}
+                                                            <span class="bg-purple-200 text-purple-800 text-xs px-1.5 py-0.5 rounded">
+                                                                {{ subgroup_name }}
+                                                            </span>
+                                                        {% endfor %}
+                                                    </div>
+                                                </div>
+                                            {% endif %}
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </td>
                             <td class="py-3 px-4 text-right">
                                 <a href="{{ url_for('edit_teacher', id=teacher.id) }}" class="text-blue-600 hover:text-blue-800 mr-3">
                                     <i class="fas fa-edit"></i>
@@ -55,4 +130,17 @@
         </div>
     {% endif %}
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function toggleDetails(detailsId) {
+        const detailsElement = document.getElementById(detailsId);
+        if (detailsElement.classList.contains('hidden')) {
+            detailsElement.classList.remove('hidden');
+        } else {
+            detailsElement.classList.add('hidden');
+        }
+    }
+</script>
 {% endblock %}

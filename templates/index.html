@@ -9,9 +9,7 @@
         Система управления расписанием
     </h1>
 
-    <div class="text-gray-700 mb-6">
-        <p>Добро пожаловать в систему управления университетским расписанием. Здесь вы можете создать и управлять расписанием занятий.</p>
-    </div>
+
 
     <!-- Статистика -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -145,53 +143,9 @@
                 </button>
             {% endif %}
 
-            <div class="mt-4">
-                <div class="bg-white p-4 rounded-lg shadow-inner border border-indigo-100">
-                    <h3 class="font-semibold text-indigo-700 mb-2">Особенности алгоритма</h3>
-                    <ul class="text-gray-600 list-disc pl-5 space-y-1">
-                        <li>Жесткие ограничения на пересечения расписания</li>
-                        <li>Учет типов аудиторий для различных занятий</li>
-                        <li>Ограничение нагрузки преподавателей</li>
-                        <li>Оптимизация загрузки аудиторий</li>
-                        <li>Минимизация "окон" в расписании</li>
-                    </ul>
-                </div>
-            </div>
+
         </div>
     </div>
 </div>
 
-<div class="bg-white shadow-lg rounded-lg p-6">
-    <h2 class="text-xl font-bold text-indigo-800 mb-4">
-        <i class="fas fa-info-circle mr-2"></i>
-        Как пользоваться системой
-    </h2>
-
-    <div class="space-y-4 text-gray-700">
-        <div class="bg-blue-50 p-4 rounded-lg">
-            <h3 class="font-semibold text-blue-800 mb-2">1. Настройте параметры учебного процесса</h3>
-            <p>Укажите количество учебных недель в семестре, чтобы система могла правильно распределить занятия.</p>
-        </div>
-
-        <div class="bg-green-50 p-4 rounded-lg">
-            <h3 class="font-semibold text-green-800 mb-2">2. Добавьте необходимые данные</h3>
-            <p>Заполните информацию о преподавателях, студенческих группах, аудиториях и учебных дисциплинах.</p>
-        </div>
-
-        <div class="bg-yellow-50 p-4 rounded-lg">
-            <h3 class="font-semibold text-yellow-800 mb-2">3. Создайте учебные дисциплины</h3>
-            <p>Для каждой дисциплины укажите преподавателя, количество лекций, практик и лабораторных работ, а также группы студентов.</p>
-        </div>
-
-        <div class="bg-purple-50 p-4 rounded-lg">
-            <h3 class="font-semibold text-purple-800 mb-2">4. Сгенерируйте расписание</h3>
-            <p>Нажмите кнопку "Сгенерировать расписание", и система автоматически создаст оптимальное расписание с учетом всех ограничений.</p>
-        </div>
-
-        <div class="bg-indigo-50 p-4 rounded-lg">
-            <h3 class="font-semibold text-indigo-800 mb-2">5. Просмотрите результат</h3>
-            <p>Перейдите в раздел "Расписание", чтобы увидеть сгенерированное расписание для каждой группы по неделям.</p>
-        </div>
-    </div>
-</div>
-{% endblock %}
+    {% endblock %}
