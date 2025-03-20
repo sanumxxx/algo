@@ -23,6 +23,9 @@
                 Генератор расписания
             </a>
             <div class="hidden md:flex space-x-6">
+                <a href="{{ url_for('faculties_list') }}" class="hover:text-indigo-200 transition duration-300">
+                    <i class="fas fa-university mr-1"></i> Факультеты
+                </a>
                 <a href="{{ url_for('teachers_list') }}" class="hover:text-indigo-200 transition duration-300">
                     <i class="fas fa-chalkboard-teacher mr-1"></i> Преподаватели
                 </a>
@@ -35,9 +38,22 @@
                 <a href="{{ url_for('courses_list') }}" class="hover:text-indigo-200 transition duration-300">
                     <i class="fas fa-book mr-1"></i> Дисциплины
                 </a>
-                <a href="{{ url_for('view_schedule') }}" class="hover:text-indigo-200 transition duration-300">
-                    <i class="fas fa-calendar-week mr-1"></i> Расписание
-                </a>
+                <div class="relative group">
+                    <a href="#" class="hover:text-indigo-200 transition duration-300 flex items-center">
+                        <i class="fas fa-calendar-week mr-1"></i> Расписание <i class="fas fa-chevron-down ml-1 text-xs"></i>
+                    </a>
+                    <div class="absolute left-0 mt-2 w-48 bg-white rounded-md shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition duration-300 z-50">
+                        <a href="{{ url_for('view_schedule') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-indigo-100 rounded-t-md">
+                            <i class="fas fa-eye mr-1"></i> Просмотр расписания
+                        </a>
+                        <a href="{{ url_for('manual_schedule') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-indigo-100">
+                            <i class="fas fa-edit mr-1"></i> Ручное управление
+                        </a>
+                        <a href="{{ url_for('settings') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-indigo-100 rounded-b-md">
+                            <i class="fas fa-cog mr-1"></i> Настройки расписания
+                        </a>
+                    </div>
+                </div>
             </div>
             <button id="mobile-menu-button" class="md:hidden text-white">
                 <i class="fas fa-bars text-2xl"></i>
@@ -46,6 +62,9 @@
         <!-- Мобильное меню -->
         <div id="mobile-menu" class="md:hidden hidden bg-indigo-800 pb-4">
             <div class="container mx-auto px-4 flex flex-col">
+                <a href="{{ url_for('faculties_list') }}" class="py-2 hover:text-indigo-200 transition duration-300">
+                    <i class="fas fa-university mr-1"></i> Факультеты
+                </a>
                 <a href="{{ url_for('teachers_list') }}" class="py-2 hover:text-indigo-200 transition duration-300">
                     <i class="fas fa-chalkboard-teacher mr-1"></i> Преподаватели
                 </a>
@@ -59,7 +78,13 @@
                     <i class="fas fa-book mr-1"></i> Дисциплины
                 </a>
                 <a href="{{ url_for('view_schedule') }}" class="py-2 hover:text-indigo-200 transition duration-300">
-                    <i class="fas fa-calendar-week mr-1"></i> Расписание
+                    <i class="fas fa-eye mr-1"></i> Просмотр расписания
+                </a>
+                <a href="{{ url_for('manual_schedule') }}" class="py-2 hover:text-indigo-200 transition duration-300">
+                    <i class="fas fa-edit mr-1"></i> Ручное управление
+                </a>
+                <a href="{{ url_for('settings') }}" class="py-2 hover:text-indigo-200 transition duration-300">
+                    <i class="fas fa-cog mr-1"></i> Настройки расписания
                 </a>
             </div>
         </div>

@@ -12,7 +12,19 @@
 
 
     <!-- Статистика -->
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+    <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
+        <div class="bg-purple-50 p-4 rounded-lg shadow border border-purple-100">
+            <div class="flex items-center">
+                <div class="text-purple-600 text-2xl mr-3">
+                    <i class="fas fa-university"></i>
+                </div>
+                <div>
+                    <h3 class="text-purple-800 font-medium">Факультетов</h3>
+                    <p class="text-3xl font-bold text-purple-700">{{ faculty_count }}</p>
+                </div>
+            </div>
+        </div>
+
         <div class="bg-blue-50 p-4 rounded-lg shadow border border-blue-100">
             <div class="flex items-center">
                 <div class="text-blue-600 text-2xl mr-3">
@@ -49,14 +61,14 @@
             </div>
         </div>
 
-        <div class="bg-purple-50 p-4 rounded-lg shadow border border-purple-100">
+        <div class="bg-indigo-50 p-4 rounded-lg shadow border border-indigo-100">
             <div class="flex items-center">
-                <div class="text-purple-600 text-2xl mr-3">
+                <div class="text-indigo-600 text-2xl mr-3">
                     <i class="fas fa-book"></i>
                 </div>
                 <div>
-                    <h3 class="text-purple-800 font-medium">Дисциплин</h3>
-                    <p class="text-3xl font-bold text-purple-700">{{ course_count }}</p>
+                    <h3 class="text-indigo-800 font-medium">Дисциплин</h3>
+                    <p class="text-3xl font-bold text-indigo-700">{{ course_count }}</p>
                 </div>
             </div>
         </div>
@@ -73,6 +85,7 @@
                     <div>
                         <h3 class="font-semibold text-indigo-700">Учебный период</h3>
                         <p class="text-gray-600">Количество недель: <span class="font-bold">{{ settings.weeks_count }}</span></p>
+                        <p class="text-gray-600">Версия расписания: <span class="font-bold">{{ settings.version }}</span></p>
                     </div>
                     <a href="{{ url_for('settings') }}" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg transition duration-300">
                         <i class="fas fa-cog mr-1"></i> Изменить
@@ -80,7 +93,11 @@
                 </div>
             </div>
 
-            <div class="grid grid-cols-2 gap-3">
+            <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
+                <a href="{{ url_for('faculties_list') }}" class="bg-white hover:bg-gray-50 p-3 rounded-lg shadow border border-gray-200 flex flex-col items-center transition duration-300">
+                    <i class="fas fa-university text-indigo-600 text-xl mb-2"></i>
+                    <span class="text-gray-800 font-medium">Факультеты</span>
+                </a>
                 <a href="{{ url_for('teachers_list') }}" class="bg-white hover:bg-gray-50 p-3 rounded-lg shadow border border-gray-200 flex flex-col items-center transition duration-300">
                     <i class="fas fa-chalkboard-teacher text-indigo-600 text-xl mb-2"></i>
                     <span class="text-gray-800 font-medium">Преподаватели</span>
@@ -96,6 +113,12 @@
                 <a href="{{ url_for('courses_list') }}" class="bg-white hover:bg-gray-50 p-3 rounded-lg shadow border border-gray-200 flex flex-col items-center transition duration-300">
                     <i class="fas fa-book text-indigo-600 text-xl mb-2"></i>
                     <span class="text-gray-800 font-medium">Дисциплины</span>
+                </a>
+            </div>
+
+            <div class="text-right">
+                <a href="{{ url_for('settings') }}" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium">
+                    Все настройки <i class="fas fa-arrow-right ml-1"></i>
                 </a>
             </div>
         </div>
@@ -116,14 +139,22 @@
                     </p>
 
                     {% if teacher_count > 0 and room_count > 0 and group_count > 0 and course_count > 0 %}
-                        <a href="{{ url_for('generate_schedule') }}" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex justify-center items-center transition duration-300 w-full">
-                            <i class="fas fa-magic mr-2"></i>
+                        <div class="flex flex-col sm:flex-row gap-2 mb-2">
+                            <a href="{{ url_for('generate_schedule') }}" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex justify-center items-center transition duration-300 w-full">
+                                <i class="fas fa-magic mr-2"></i>
+                                {% if schedule_exists %}
+                                    Перегенерировать расписание
+                                {% else %}
+                                    Сгенерировать расписание
+                                {% endif %}
+                            </a>
+
                             {% if schedule_exists %}
-                                Перегенерировать расписание
-                            {% else %}
-                                Сгенерировать расписание
+                                <a href="{{ url_for('generate_schedule', keep_manual='true') }}" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex justify-center items-center transition duration-300 w-full">
+                                    <i class="fas fa-sync-alt mr-2"></i> Обновить с сохранением ручных
+                                </a>
                             {% endif %}
-                        </a>
+                        </div>
                     {% else %}
                         <button disabled class="bg-gray-400 text-white px-4 py-2 rounded-lg flex justify-center items-center w-full cursor-not-allowed">
                             <i class="fas fa-magic mr-2"></i> Сгенерировать расписание
@@ -133,19 +164,81 @@
                 </div>
             </div>
 
-            {% if schedule_exists %}
-                <a href="{{ url_for('view_schedule') }}" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-3 rounded-lg flex justify-center items-center transition duration-300 w-full">
-                    <i class="fas fa-calendar-alt mr-2"></i> Просмотр расписания
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+                <a href="{{ url_for('view_schedule') }}" class="bg-white hover:bg-gray-50 p-3 rounded-lg shadow border border-gray-200 flex flex-col items-center transition duration-300 {% if not schedule_exists %}opacity-50 cursor-not-allowed{% endif %}">
+                    <i class="fas fa-eye text-indigo-600 text-xl mb-2"></i>
+                    <span class="text-gray-800 font-medium">Просмотр расписания</span>
                 </a>
-            {% else %}
-                <button disabled class="bg-gray-400 text-white px-4 py-3 rounded-lg flex justify-center items-center w-full cursor-not-allowed">
-                    <i class="fas fa-calendar-alt mr-2"></i> Просмотр расписания
-                </button>
-            {% endif %}
+                <a href="{{ url_for('manual_schedule') }}" class="bg-white hover:bg-gray-50 p-3 rounded-lg shadow border border-gray-200 flex flex-col items-center transition duration-300">
+                    <i class="fas fa-edit text-indigo-600 text-xl mb-2"></i>
+                    <span class="text-gray-800 font-medium">Ручное управление</span>
+                </a>
+            </div>
 
-
+            <div class="bg-yellow-50 p-3 rounded-lg border border-yellow-200">
+                <div class="flex items-start">
+                    <div class="flex-shrink-0 pt-0.5">
+                        <i class="fas fa-lightbulb text-yellow-600"></i>
+                    </div>
+                    <div class="ml-3">
+                        <h3 class="text-sm font-medium text-yellow-800">Совет</h3>
+                        <p class="text-sm text-yellow-700">Используйте ручное управление расписанием для размещения занятий, которые должны проходить в конкретное время и конкретных аудиториях.</p>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
+
+    {% if settings %}
+    <div class="mt-6 bg-white p-4 rounded-lg shadow border border-gray-200">
+        <h2 class="text-lg font-semibold text-gray-700 mb-3">Текущие настройки генерации расписания</h2>
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+            <div class="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                <h3 class="font-medium text-gray-800">Временной диапазон</h3>
+                <p class="text-gray-600">Недель: {{ settings.weeks_count }}</p>
+                <p class="text-gray-600">Дней в неделе: {{ settings.days_per_week }}</p>
+                <p class="text-gray-600">Пар в день: {{ settings.slots_per_day }}</p>
+            </div>
+
+            <div class="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                <h3 class="font-medium text-gray-800">Приоритеты</h3>
+                <p class="text-gray-600">
+                    <i class="fas {% if settings.prioritize_faculty %}fa-check-circle text-green-600{% else %}fa-times-circle text-red-600{% endif %} mr-1"></i>
+                    Учитывать приоритеты факультетов
+                </p>
+                <p class="text-gray-600">
+                    <i class="fas {% if settings.respect_teacher_preferences %}fa-check-circle text-green-600{% else %}fa-times-circle text-red-600{% endif %} mr-1"></i>
+                    Учитывать предпочтения преподавателей
+                </p>
+                <p class="text-gray-600">
+                    <i class="fas {% if settings.optimize_room_usage %}fa-check-circle text-green-600{% else %}fa-times-circle text-red-600{% endif %} mr-1"></i>
+                    Оптимизировать использование аудиторий
+                </p>
+            </div>
+
+            <div class="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                <h3 class="font-medium text-gray-800">Общие настройки</h3>
+                <p class="text-gray-600">
+                    <i class="fas {% if settings.avoid_windows %}fa-check-circle text-green-600{% else %}fa-times-circle text-red-600{% endif %} mr-1"></i>
+                    Избегать "окон" у студентов
+                </p>
+                <p class="text-gray-600">
+                    Максимум пар в день: {{ settings.max_lessons_per_day_global }}
+                </p>
+                <p class="text-gray-600">
+                    Распределение пар:
+                    {% if settings.preferred_lesson_distribution == 'balanced' %}
+                        <span class="text-indigo-600">Сбалансированное</span>
+                    {% elif settings.preferred_lesson_distribution == 'morning' %}
+                        <span class="text-indigo-600">Утренние пары</span>
+                    {% elif settings.preferred_lesson_distribution == 'afternoon' %}
+                        <span class="text-indigo-600">Дневные пары</span>
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
 </div>
 
-    {% endblock %}
+{% endblock %}

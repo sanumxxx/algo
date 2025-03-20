@@ -24,6 +24,62 @@
             {% endif %}
         </div>
 
+        <!-- Предпочтения расписания -->
+        <div class="p-4 bg-gray-50 rounded-md border border-gray-200 space-y-4 mt-4">
+            <h3 class="font-medium text-gray-700">Предпочтения для расписания</h3>
+
+            <div class="space-y-2">
+                <label for="preferred_days" class="block text-sm font-medium text-gray-700">Предпочтительные дни</label>
+                {{ form.preferred_days(class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500", size=5) }}
+                {% if form.preferred_days.errors %}
+                    <div class="text-red-500 text-sm mt-1">
+                        {% for error in form.preferred_days.errors %}
+                            {{ error }}
+                        {% endfor %}
+                    </div>
+                {% endif %}
+                <p class="text-gray-500 text-sm">Удерживайте Ctrl для выбора нескольких дней. Оставьте пустым для использования всех дней.</p>
+            </div>
+
+            <div class="space-y-2">
+                <label for="preferred_time_slots" class="block text-sm font-medium text-gray-700">Предпочтительные пары</label>
+                {{ form.preferred_time_slots(class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500", size=4) }}
+                {% if form.preferred_time_slots.errors %}
+                    <div class="text-red-500 text-sm mt-1">
+                        {% for error in form.preferred_time_slots.errors %}
+                            {{ error }}
+                        {% endfor %}
+                    </div>
+                {% endif %}
+                <p class="text-gray-500 text-sm">Удерживайте Ctrl для выбора нескольких пар. Оставьте пустым для использования всех пар.</p>
+            </div>
+
+            <div class="space-y-2">
+                <label for="max_lessons_per_day" class="block text-sm font-medium text-gray-700">Максимум пар в день</label>
+                {{ form.max_lessons_per_day(class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500") }}
+                {% if form.max_lessons_per_day.errors %}
+                    <div class="text-red-500 text-sm mt-1">
+                        {% for error in form.max_lessons_per_day.errors %}
+                            {{ error }}
+                        {% endfor %}
+                    </div>
+                {% endif %}
+                <p class="text-gray-500 text-sm">Рекомендуемое значение: 3-4 пары</p>
+            </div>
+        </div>
+
+        <div class="space-y-2">
+            <label for="notes" class="block text-sm font-medium text-gray-700">Примечания</label>
+            {{ form.notes(class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500", rows="3") }}
+            {% if form.notes.errors %}
+                <div class="text-red-500 text-sm mt-1">
+                    {% for error in form.notes.errors %}
+                        {{ error }}
+                    {% endfor %}
+                </div>
+            {% endif %}
+        </div>
+
         <div class="flex space-x-4 pt-4">
             <a href="{{ url_for('teachers_list') }}" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 px-4 rounded-lg transition duration-300">
                 Отмена

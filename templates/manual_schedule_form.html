@@ -1,0 +1,271 @@
+{% extends "layout.html" %}
+
+{% block title %}{{ title }} - Система управления расписанием{% endblock %}
+
+{% block content %}
+<div class="bg-white shadow-lg rounded-lg p-6 max-w-3xl mx-auto">
+    <h1 class="text-2xl font-bold text-indigo-800 mb-6">
+        <i class="fas fa-calendar-plus mr-2"></i>
+        {{ title }}
+    </h1>
+
+    <form method="POST" class="space-y-4" id="schedule-form">
+        {{ form.csrf_token }}
+
+        <div id="conflict-warning" class="bg-red-50 border border-red-200 text-red-700 p-4 rounded-lg mb-4 hidden">
+            <div class="flex">
+                <div class="flex-shrink-0">
+                    <i class="fas fa-exclamation-triangle text-red-600"></i>
+                </div>
+                <div class="ml-3">
+                    <h3 class="text-sm font-medium text-red-800">Обнаружены конфликты в расписании:</h3>
+                    <div class="mt-2 text-sm text-red-700" id="conflict-list"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="space-y-2">
+                <label for="course_id" class="block text-sm font-medium text-gray-700">Дисциплина</label>
+                {{ form.course_id(class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500") }}
+                {% if form.course_id.errors %}
+                    <div class="text-red-500 text-sm mt-1">
+                        {% for error in form.course_id.errors %}
+                            {{ error }}
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            </div>
+
+            <div class="space-y-2">
+                <label for="lesson_type" class="block text-sm font-medium text-gray-700">Тип занятия</label>
+                {{ form.lesson_type(class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500") }}
+                {% if form.lesson_type.errors %}
+                    <div class="text-red-500 text-sm mt-1">
+                        {% for error in form.lesson_type.errors %}
+                            {{ error }}
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="space-y-2">
+                <label for="teacher_id" class="block text-sm font-medium text-gray-700">Преподаватель</label>
+                {{ form.teacher_id(class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500") }}
+                {% if form.teacher_id.errors %}
+                    <div class="text-red-500 text-sm mt-1">
+                        {% for error in form.teacher_id.errors %}
+                            {{ error }}
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            </div>
+
+            <div class="space-y-2">
+                <label for="room_id" class="block text-sm font-medium text-gray-700">Аудитория</label>
+                {{ form.room_id(class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500") }}
+                {% if form.room_id.errors %}
+                    <div class="text-red-500 text-sm mt-1">
+                        {% for error in form.room_id.errors %}
+                            {{ error }}
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="space-y-2">
+            <label for="groups" class="block text-sm font-medium text-gray-700">Группы</label>
+            {{ form.groups(class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500", size=4) }}
+            <p class="text-gray-500 text-sm">Удерживайте Ctrl для выбора нескольких групп</p>
+            {% if form.groups.errors %}
+                <div class="text-red-500 text-sm mt-1">
+                    {% for error in form.groups.errors %}
+                        {{ error }}
+                    {% endfor %}
+                </div>
+            {% endif %}
+        </div>
+
+        <div id="subgroups-container" class="space-y-2 hidden">
+            <label for="lab_subgroup_id" class="block text-sm font-medium text-gray-700">Подгруппа (для лабораторных работ)</label>
+            {{ form.lab_subgroup_id(class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500") }}
+            <p class="text-gray-500 text-sm">Выберите подгруппу, если это лабораторная работа для подгруппы</p>
+        </div>
+
+        <div class="bg-indigo-50 p-4 rounded-lg border border-indigo-100 mt-4">
+            <h3 class="font-medium text-indigo-800 mb-3">Время проведения</h3>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="space-y-2">
+                    <label for="week" class="block text-sm font-medium text-gray-700">Неделя</label>
+                    {{ form.week(class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500", min="1") }}
+                    {% if form.week.errors %}
+                        <div class="text-red-500 text-sm mt-1">
+                            {% for error in form.week.errors %}
+                                {{ error }}
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+
+                <div class="space-y-2">
+                    <label for="day" class="block text-sm font-medium text-gray-700">День</label>
+                    {{ form.day(class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500") }}
+                    {% if form.day.errors %}
+                        <div class="text-red-500 text-sm mt-1">
+                            {% for error in form.day.errors %}
+                                {{ error }}
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+
+                <div class="space-y-2">
+                    <label for="time_slot" class="block text-sm font-medium text-gray-700">Пара</label>
+                    {{ form.time_slot(class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500") }}
+                    {% if form.time_slot.errors %}
+                        <div class="text-red-500 text-sm mt-1">
+                            {% for error in form.time_slot.errors %}
+                                {{ error }}
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="space-y-2">
+            <label for="notes" class="block text-sm font-medium text-gray-700">Примечания</label>
+            {{ form.notes(class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500", rows="3") }}
+            {% if form.notes.errors %}
+                <div class="text-red-500 text-sm mt-1">
+                    {% for error in form.notes.errors %}
+                        {{ error }}
+                    {% endfor %}
+                </div>
+            {% endif %}
+        </div>
+
+        <div class="flex justify-between pt-4">
+            <div>
+                <a href="{{ url_for('manual_schedule') }}" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 px-4 rounded-lg transition duration-300">
+                    Отмена
+                </a>
+            </div>
+            <div class="flex space-x-2">
+                <button type="button" id="check-conflicts-btn" class="bg-yellow-500 hover:bg-yellow-600 text-white font-medium py-2 px-4 rounded-lg transition duration-300">
+                    <i class="fas fa-search mr-1"></i> Проверить конфликты
+                </button>
+                {{ form.submit(class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-4 rounded-lg transition duration-300") }}
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const lessonTypeSelect = document.getElementById('lesson_type');
+        const subgroupsContainer = document.getElementById('subgroups-container');
+        const checkConflictsBtn = document.getElementById('check-conflicts-btn');
+        const conflictWarning = document.getElementById('conflict-warning');
+        const conflictList = document.getElementById('conflict-list');
+        const scheduleForm = document.getElementById('schedule-form');
+
+        // Показывать/скрывать селектор подгрупп в зависимости от типа занятия
+        lessonTypeSelect.addEventListener('change', function() {
+            if (this.value === 'lab') {
+                subgroupsContainer.classList.remove('hidden');
+            } else {
+                subgroupsContainer.classList.add('hidden');
+            }
+        });
+
+        // Проверить видимость подгрупп при загрузке страницы
+        if (lessonTypeSelect.value === 'lab') {
+            subgroupsContainer.classList.remove('hidden');
+        }
+
+        // Проверка конфликтов при нажатии на кнопку
+        checkConflictsBtn.addEventListener('click', function() {
+            // Получение данных формы
+            const courseId = document.getElementById('course_id').value;
+            const teacherId = document.getElementById('teacher_id').value;
+            const roomId = document.getElementById('room_id').value;
+            const week = document.getElementById('week').value;
+            const day = document.getElementById('day').value;
+            const timeSlot = document.getElementById('time_slot').value;
+
+            // Получение выбранных групп
+            const groupsSelect = document.getElementById('groups');
+            const groupIds = Array.from(groupsSelect.selectedOptions).map(option => option.value);
+
+            // Проверяем, что все необходимые поля заполнены
+            if (!courseId || !teacherId || !roomId || !week || day === '' || timeSlot === '' || groupIds.length === 0) {
+                alert('Пожалуйста, заполните все обязательные поля перед проверкой конфликтов');
+                return;
+            }
+
+            // Получение ID формы редактирования (если есть)
+            const currentPath = window.location.pathname;
+            const editItemMatch = currentPath.match(/\/schedule\/edit-item\/(\d+)/);
+            const excludeId = editItemMatch ? editItemMatch[1] : null;
+
+            // Отправка запроса на сервер для проверки конфликтов
+            fetch('/api/check-conflicts', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    week: parseInt(week),
+                    day: parseInt(day),
+                    time_slot: parseInt(timeSlot),
+                    teacher_id: parseInt(teacherId),
+                    room_id: parseInt(roomId),
+                    group_ids: groupIds.map(id => parseInt(id)),
+                    exclude_id: excludeId ? parseInt(excludeId) : null
+                }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Отображаем результаты проверки
+                if (data.has_conflicts) {
+                    // Есть конфликты
+                    conflictWarning.classList.remove('hidden');
+
+                    // Формируем список конфликтов
+                    conflictList.innerHTML = '';
+                    data.conflicts.forEach(conflict => {
+                        const listItem = document.createElement('div');
+                        listItem.className = 'mt-1';
+                        listItem.innerHTML = `<i class="fas fa-times-circle mr-1 text-red-500"></i> ${conflict}`;
+                        conflictList.appendChild(listItem);
+                    });
+                } else {
+                    // Нет конфликтов
+                    conflictWarning.classList.add('hidden');
+                    alert('Конфликтов не обнаружено! Вы можете сохранить занятие.');
+                }
+            })
+            .catch(error => {
+                console.error('Ошибка при проверке конфликтов:', error);
+                alert('Произошла ошибка при проверке конфликтов');
+            });
+        });
+
+        // Проверяем конфликты перед отправкой формы
+        scheduleForm.addEventListener('submit', function(event) {
+            // Для предотвращения автоматической отправки формы, если нужно
+            // event.preventDefault();
+
+            // Можно добавить дополнительные проверки перед отправкой
+            // и отправить форму программно, если все проверки пройдены
+            // this.submit();
+        });
+    });
+</script>
+{% endblock %}

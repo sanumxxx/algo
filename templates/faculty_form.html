@@ -1,0 +1,64 @@
+{% extends "layout.html" %}
+
+{% block title %}{{ title }} - Система управления расписанием{% endblock %}
+
+{% block content %}
+<div class="bg-white shadow-lg rounded-lg p-6 max-w-2xl mx-auto">
+    <h1 class="text-2xl font-bold text-indigo-800 mb-6">
+        <i class="fas fa-university mr-2"></i>
+        {{ title }}
+    </h1>
+
+    <form method="POST" class="space-y-4">
+        {{ form.csrf_token }}
+
+        <div class="space-y-2">
+            <label for="name" class="block text-sm font-medium text-gray-700">Название факультета</label>
+            {{ form.name(class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500") }}
+            {% if form.name.errors %}
+                <div class="text-red-500 text-sm mt-1">
+                    {% for error in form.name.errors %}
+                        {{ error }}
+                    {% endfor %}
+                </div>
+            {% endif %}
+        </div>
+
+        <div class="space-y-2">
+            <label for="priority" class="block text-sm font-medium text-gray-700">Приоритет (1-10)</label>
+            <div class="flex items-center mt-1">
+                <span class="text-gray-500 mr-2">Низкий</span>
+                {{ form.priority(class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500", min="1", max="10") }}
+                <span class="text-gray-500 ml-2">Высокий</span>
+            </div>
+            <p class="text-gray-500 text-sm">Чем выше приоритет, тем раньше будут размещаться занятия факультета в расписании</p>
+            {% if form.priority.errors %}
+                <div class="text-red-500 text-sm mt-1">
+                    {% for error in form.priority.errors %}
+                        {{ error }}
+                    {% endfor %}
+                </div>
+            {% endif %}
+        </div>
+
+        <div class="space-y-2">
+            <label for="description" class="block text-sm font-medium text-gray-700">Описание</label>
+            {{ form.description(class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500", rows="4") }}
+            {% if form.description.errors %}
+                <div class="text-red-500 text-sm mt-1">
+                    {% for error in form.description.errors %}
+                        {{ error }}
+                    {% endfor %}
+                </div>
+            {% endif %}
+        </div>
+
+        <div class="flex space-x-4 pt-4">
+            <a href="{{ url_for('faculties_list') }}" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 px-4 rounded-lg transition duration-300">
+                Отмена
+            </a>
+            {{ form.submit(class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-4 rounded-lg transition duration-300") }}
+        </div>
+    </form>
+</div>
+{% endblock %}

@@ -12,27 +12,128 @@
     <form method="POST" class="space-y-4">
         {{ form.csrf_token }}
 
-        <div class="space-y-2">
-            <label for="weeks_count" class="block text-sm font-medium text-gray-700">Количество недель в семестре</label>
-            {{ form.weeks_count(class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500") }}
-            {% if form.weeks_count.errors %}
-                <div class="text-red-500 text-sm mt-1">
-                    {% for error in form.weeks_count.errors %}
-                        {{ error }}
-                    {% endfor %}
+        <div class="bg-indigo-50 p-4 rounded-lg border border-indigo-100 mb-6">
+            <h2 class="font-semibold text-indigo-800 mb-3">Временные параметры</h2>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="space-y-2">
+                    <label for="weeks_count" class="block text-sm font-medium text-gray-700">Количество недель</label>
+                    {{ form.weeks_count(class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500") }}
+                    {% if form.weeks_count.errors %}
+                        <div class="text-red-500 text-sm mt-1">
+                            {% for error in form.weeks_count.errors %}
+                                {{ error }}
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                    <p class="text-gray-500 text-sm">Стандартная продолжительность семестра - 18 недель</p>
                 </div>
-            {% endif %}
-            <p class="text-gray-500 text-sm">Стандартная продолжительность семестра - 18 недель</p>
+
+                <div class="space-y-2">
+                    <label for="days_per_week" class="block text-sm font-medium text-gray-700">Дней в неделе</label>
+                    {{ form.days_per_week(class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500") }}
+                    {% if form.days_per_week.errors %}
+                        <div class="text-red-500 text-sm mt-1">
+                            {% for error in form.days_per_week.errors %}
+                                {{ error }}
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                    <p class="text-gray-500 text-sm">Обычно 5 (Пн-Пт) или 6 (Пн-Сб)</p>
+                </div>
+
+                <div class="space-y-2">
+                    <label for="slots_per_day" class="block text-sm font-medium text-gray-700">Пар в день</label>
+                    {{ form.slots_per_day(class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500") }}
+                    {% if form.slots_per_day.errors %}
+                        <div class="text-red-500 text-sm mt-1">
+                            {% for error in form.slots_per_day.errors %}
+                                {{ error }}
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                    <p class="text-gray-500 text-sm">Стандартно 7 пар</p>
+                </div>
+            </div>
         </div>
 
-        <div class="bg-yellow-50 p-4 rounded-lg border border-yellow-200 mt-4 mb-2">
+        <div class="bg-green-50 p-4 rounded-lg border border-green-100 mb-6">
+            <h2 class="font-semibold text-green-800 mb-3">Приоритеты и предпочтения</h2>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="space-y-2">
+                    <div class="flex items-center">
+                        {{ form.prioritize_faculty(class="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500") }}
+                        <label for="prioritize_faculty" class="ml-2 block text-sm text-gray-700">Учитывать приоритеты факультетов</label>
+                    </div>
+                    <p class="text-gray-500 text-sm pl-6">Дисциплины факультетов с высоким приоритетом будут размещаться в расписании первыми</p>
+                </div>
+
+                <div class="space-y-2">
+                    <div class="flex items-center">
+                        {{ form.respect_teacher_preferences(class="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500") }}
+                        <label for="respect_teacher_preferences" class="ml-2 block text-sm text-gray-700">Учитывать предпочтения преподавателей</label>
+                    </div>
+                    <p class="text-gray-500 text-sm pl-6">Размещать занятия в предпочтительные дни и часы преподавателей</p>
+                </div>
+
+                <div class="space-y-2">
+                    <div class="flex items-center">
+                        {{ form.optimize_room_usage(class="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500") }}
+                        <label for="optimize_room_usage" class="ml-2 block text-sm text-gray-700">Оптимизировать использование аудиторий</label>
+                    </div>
+                    <p class="text-gray-500 text-sm pl-6">Подбирать аудитории, наиболее подходящие по размеру</p>
+                </div>
+
+                <div class="space-y-2">
+                    <label for="preferred_lesson_distribution" class="block text-sm font-medium text-gray-700">Предпочтительное распределение пар</label>
+                    {{ form.preferred_lesson_distribution(class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500") }}
+                    {% if form.preferred_lesson_distribution.errors %}
+                        <div class="text-red-500 text-sm mt-1">
+                            {% for error in form.preferred_lesson_distribution.errors %}
+                                {{ error }}
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-blue-50 p-4 rounded-lg border border-blue-100 mb-6">
+            <h2 class="font-semibold text-blue-800 mb-3">Ограничения расписания</h2>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="space-y-2">
+                    <div class="flex items-center">
+                        {{ form.avoid_windows(class="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500") }}
+                        <label for="avoid_windows" class="ml-2 block text-sm text-gray-700">Избегать "окон" у студентов</label>
+                    </div>
+                    <p class="text-gray-500 text-sm pl-6">Стараться не оставлять свободные пары между занятиями у групп</p>
+                </div>
+
+                <div class="space-y-2">
+                    <label for="max_lessons_per_day_global" class="block text-sm font-medium text-gray-700">Глобальный максимум пар в день</label>
+                    {{ form.max_lessons_per_day_global(class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500") }}
+                    {% if form.max_lessons_per_day_global.errors %}
+                        <div class="text-red-500 text-sm mt-1">
+                            {% for error in form.max_lessons_per_day_global.errors %}
+                                {{ error }}
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                    <p class="text-gray-500 text-sm">Максимальное количество пар в день для студентов и преподавателей</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-yellow-50 p-4 rounded-lg border border-yellow-200 mt-4 mb-6">
             <div class="flex">
                 <div class="text-yellow-600 mr-3">
                     <i class="fas fa-exclamation-circle text-xl"></i>
                 </div>
                 <div>
                     <h3 class="font-semibold text-yellow-800">Обратите внимание</h3>
-                    <p class="text-yellow-700 text-sm">Изменение количества недель может повлиять на существующее расписание. Рекомендуется настроить этот параметр до генерации расписания.</p>
+                    <p class="text-yellow-700 text-sm">Изменение этих настроек может повлиять на существующее расписание. Рекомендуется настроить эти параметры до генерации расписания. После изменения параметров может потребоваться перегенерация расписания.</p>
                 </div>
             </div>
         </div>
@@ -40,9 +141,9 @@
         <div class="border-t border-gray-200 pt-4">
             <h2 class="font-semibold text-gray-700 mb-2">Дополнительная информация</h2>
             <ul class="text-gray-600 list-disc pl-5 space-y-1 text-sm">
-                <li>Учебная неделя включает 5 рабочих дней (Пн-Пт)</li>
-                <li>Каждый день содержит 7 учебных пар</li>
                 <li>Система автоматически распределяет занятия по неделям, начиная с указанной в дисциплине начальной недели</li>
+                <li>Предпочтения преподавателей и групп учитываются при наличии соответствующих настроек</li>
+                <li>Для ручного размещения отдельных занятий используйте раздел "Ручное управление"</li>
             </ul>
         </div>
 
